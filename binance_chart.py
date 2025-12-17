@@ -184,7 +184,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         
         for i, period in enumerate(ma_periods):
             add_plots.append(
-                mpf.make_addplot(ma_dict[period], color=ma_colors[i % len(ma_colors)], width=1.5)
+                mpf.make_addplot(ma_dict[period], color=ma_colors[i % len(ma_colors)], width=0.6)
             )
     else:
         title_ma = ''
@@ -198,17 +198,18 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
     macd, signal_line, histogram = calculate_macd(df['Close'])
     
     # Add RSI to additional plots
-    add_plots.append(mpf.make_addplot(rsi, panel=2, color='purple', ylabel='RSI', secondary_y=False))
-    add_plots.append(mpf.make_addplot([70]*len(df), panel=2, color='red', linestyle='--', width=0.7, alpha=0.5))
-    add_plots.append(mpf.make_addplot([30]*len(df), panel=2, color='green', linestyle='--', width=0.7, alpha=0.5))
+    add_plots.append(mpf.make_addplot(rsi, panel=2, color='purple', ylabel='RSI', secondary_y=False, width=0.6))
+    add_plots.append(mpf.make_addplot([70]*len(df), panel=2, color='red', linestyle='--', width=0.4, alpha=0.5))
+    add_plots.append(mpf.make_addplot([30]*len(df), panel=2, color='green', linestyle='--', width=0.4, alpha=0.5))
     
     # Add MACD to additional plots
-    add_plots.append(mpf.make_addplot(macd, panel=3, color='blue', ylabel='MACD'))
-    add_plots.append(mpf.make_addplot(signal_line, panel=3, color='orange'))
+    add_plots.append(mpf.make_addplot(macd, panel=3, color='blue', ylabel='MACD', width=0.6))
+    add_plots.append(mpf.make_addplot(signal_line, panel=3, color='orange', width=0.6))
     colors = ['red' if h > 0 else 'green' for h in histogram]
     add_plots.append(mpf.make_addplot(histogram, panel=3, type='bar', color=colors, alpha=0.5))
     
     # Plot using mplfinance with indicators
+    # figsize=(6.4, 4.8) @ DPI=100 = 640x480像素 = ~300 tokens
     fig, axes = mpf.plot(
         df[['Open', 'High', 'Low', 'Close', 'Volume']],
         type='candle',
@@ -218,7 +219,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         volume=True,
         ylabel_lower='Volume',
         addplot=add_plots if add_plots else None,
-        figsize=(12, 10),
+        figsize=(6.4, 4.8),
         returnfig=True,
         panel_ratios=(3, 1, 0.8, 0.8),
         datetime_format='%H:%M',
@@ -233,21 +234,23 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
     
     # Expand figure to make room for summary panel on the right
     if stats:
-        # Adjust figure size for indicators
-        fig.set_size_inches(13.5, 10)
+        # 保持总分辨率在640x480左右，但加宽以容纳统计面板
+        # 7.2x4.8 @ DPI=100 = 720x480像素 = ~346 tokens
+        fig.set_size_inches(7.2, 4.8)
         
         # Adjust existing axes to make room on the right (maximize chart space)
         for ax in fig.get_axes():
             pos = ax.get_position()
             ax.set_position([pos.x0 * 0.91, pos.y0, pos.width * 0.91, pos.height])
         
-        # Add summary panel on the right - positioned higher to avoid y-axis overlap
-        ax_summary = fig.add_axes([0.665, 0.38, 0.315, 0.50])
+        # Add summary panel on the right - positioned lower to avoid overlapping chart
+        # [left, bottom, width, height] - 减小height值可以缩短面板高度
+        ax_summary = fig.add_axes([0.81, 0.323, 0.2, 0.40])
         ax_summary.axis('off')
         
         # Build summary text with technical indicators
         summary_lines = []
-        summary_lines.append("══ MARKET ANALYSIS ══\n")
+        summary_lines.append("═ ANALYSIS ═\n")
         
         # Price info
         summary_lines.append(f"Price: ${stats['current_price']:,.2f}")
@@ -303,56 +306,28 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         
         summary_text = '\n'.join(summary_lines)
         
-        # Add background box with text
-        bbox_props = dict(boxstyle='round,pad=0.8', facecolor='#F8F8F8', edgecolor='#999999', linewidth=2)
+        # Add background box with text (smaller font for 640x480)
+        bbox_props = dict(boxstyle='round,pad=0.5', facecolor='#F8F8F8', edgecolor='#999999', linewidth=1.2)
         ax_summary.text(0.5, 0.5, summary_text, 
                        transform=ax_summary.transAxes,
-                       fontsize=10,
+                       fontsize=7,
                        verticalalignment='center',
                        horizontalalignment='center',
                        fontfamily='monospace',
                        bbox=bbox_props,
-                       linespacing=1.5)
+                       linespacing=1.3)
     
-    # Add funding rate history chart in the bottom right corner
-    if 'funding_history' in stats and stats['funding_history'] is not None:
-        times, rates = stats['funding_history']
-        if times and rates:
-            ax_funding = fig.add_axes([0.78, 0.15, 0.20, 0.18])
-            
-            # Plot funding rate history
-            colors = ['red' if r > 0 else 'green' for r in rates]
-            ax_funding.bar(range(len(rates)), rates, color=colors, alpha=0.7, width=0.8)
-            ax_funding.axhline(y=0, color='gray', linestyle='-', linewidth=0.8, alpha=0.5)
-            
-            # Styling
-            ax_funding.set_title('Funding Rate History', fontsize=9, fontweight='bold', pad=5)
-            ax_funding.set_ylabel('%', fontsize=8)
-            ax_funding.yaxis.tick_right()
-            ax_funding.yaxis.set_label_position('right')
-            ax_funding.tick_params(axis='both', labelsize=7)
-            ax_funding.grid(True, alpha=0.3, linewidth=0.5)
-            
-            # X-axis labels (show only a few)
-            tick_positions = [0, len(rates)//2, len(rates)-1]
-            tick_labels = [times[i].strftime('%m-%d') for i in tick_positions]
-            ax_funding.set_xticks(tick_positions)
-            ax_funding.set_xticklabels(tick_labels, fontsize=7)
-            
-            # Add current value annotation
-            if rates:
-                current_rate = rates[-1]
-                ax_funding.text(0.98, 0.95, f'Current: {current_rate:+.4f}%',
-                              transform=ax_funding.transAxes,
-                              fontsize=7,
-                              verticalalignment='top',
-                              horizontalalignment='right',
-                              bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='gray'))
-    
-    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.savefig(save_path, dpi=100, bbox_inches='tight', pad_inches=0.1)
     plt.close()
     
-    print(f"Chart saved to: {save_path}")
+    # 获取文件信息
+    from PIL import Image
+    img = Image.open(save_path)
+    width, height = img.size
+    file_size = os.path.getsize(save_path) / 1024  # KB
+    tokens = (width * height) / 1024  # 估算token数
+    print(f"Chart saved: {save_path}")
+    print(f"  Resolution: {width}x{height}px ({file_size:.1f} KB, ~{tokens:.0f} tokens)")
 
 if __name__ == '__main__':
     # Configuration
