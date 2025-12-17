@@ -15,14 +15,17 @@ from vquant.vision.chart import (
     calculate_rsi, 
     calculate_macd)
 from vquant.analysis.advisor import PositionAdvisor
+from vquant.executor.trader import Trader
 
 
 def run(symbol='BTCUSDT', interval='1h', limit=100, 
-                         ma_periods=[7, 25, 99], service='copilot', model=None):
+                         ma_periods=[7, 25, 99], service='copilot', model=None, execute_trade=False):
     if service == 'copilot' and model:
         print(f"AI服务: GitHub Copilot ({model})")
     else:
         print(f"AI服务: {service.upper()}")
+    if execute_trade:
+        print("⚠️  交易执行模式已启用")
     print()
     # 创建图表目录
     os.makedirs('charts', exist_ok=True)
@@ -124,6 +127,17 @@ def run(symbol='BTCUSDT', interval='1h', limit=100,
     try:
         advisor = PositionAdvisor(service=service, model=model)
         result = advisor.analyze(save_path, save_json=True)
+        
+        # 如果启用了交易执行，则执行交易
+        if execute_trade and result:
+            print("\n💼 执行交易...")
+            try:
+                trader = Trader()
+                trader.trade(result)
+                print("✓ 交易执行完成")
+            except Exception as trade_error:
+                print(f"❌ 交易执行失败: {trade_error}")
+        
         return {
             'chart_path': save_path,
             'stats': stats,
@@ -151,9 +165,10 @@ def main():
     interval = sys.argv[2] if len(sys.argv) > 2 else '1h'
     service = sys.argv[3] if len(sys.argv) > 3 else 'copilot'
     model = sys.argv[4] if len(sys.argv) > 4 else None
+    execute_trade = '--trade' in sys.argv or '-t' in sys.argv
     
     # 运行分析
-    result = run(symbol=symbol, interval=interval, service=service, model=model)
+    result = run(symbol=symbol, interval=interval, service=service, model=model, execute_trade=execute_trade)
     if result:
         print("\n✅ 分析完成！")
     else:
