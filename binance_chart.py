@@ -189,10 +189,6 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
     else:
         title_ma = ''
     
-    title = f'{symbol} Candlestick Chart'
-    if title_ma:
-        title += f' with {title_ma}'
-    
     # Calculate RSI and MACD
     rsi = calculate_rsi(df['Close'])
     macd, signal_line, histogram = calculate_macd(df['Close'])
@@ -214,7 +210,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         df[['Open', 'High', 'Low', 'Close', 'Volume']],
         type='candle',
         style=s,
-        title=title,
+        title='',  # 移除title以最大化空间利用
         ylabel='Price (USDT)',
         volume=True,
         ylabel_lower='Volume',
@@ -225,6 +221,36 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         datetime_format='%H:%M',
         xrotation=0
     )
+    
+    # 添加图例 - 只在左侧放置，避免遮挡右边最新行情
+    if ma_dict:
+        ma_periods = sorted(ma_dict.keys())
+        ma_labels = [f'MA{p}' for p in ma_periods]
+        
+        # 比较左侧K线的最高点和最低点位置，选择空间更大的一侧
+        left_section = df.iloc[:len(df)//3]
+        high_avg = left_section['High'].mean()
+        low_avg = left_section['Low'].mean()
+        mid_price = (df['High'].max() + df['Low'].min()) / 2
+        
+        # 如果左侧K线偏向上方，图例放左下；否则放左上
+        if high_avg > mid_price:
+            legend_loc = 'lower left'
+        else:
+            legend_loc = 'upper left'
+        
+        # 在主图表（第一个axes）添加图例
+        axes[0].legend(ma_labels, loc=legend_loc, fontsize=6, framealpha=0.9, edgecolor='gray')
+    
+    # 添加关键价格水平（支撑/阻力位）
+    if stats:
+        high_price = stats['high']
+        low_price = stats['low']
+        current_price = stats['current_price']
+        
+        # 画出高低点水平线
+        axes[0].axhline(y=high_price, color='red', linestyle=':', linewidth=0.8, alpha=0.6)
+        axes[0].axhline(y=low_price, color='green', linestyle=':', linewidth=0.8, alpha=0.6)
     
     # Simplify x-axis labels for cleaner display
     for ax in fig.get_axes():
@@ -250,7 +276,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         
         # Build summary text with technical indicators
         summary_lines = []
-        summary_lines.append("═ ANALYSIS ═\n")
+        summary_lines.append(f"═ {symbol} ═\n")
         
         # Price info
         summary_lines.append(f"Price: ${stats['current_price']:,.2f}")
@@ -292,9 +318,19 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
             signal_val = stats['macd_signal']
             summary_lines.append(f"\nMACD: {macd_val:.2f}")
             if macd_val > signal_val:
-                summary_lines.append("  BULLISH CROSS")
+                summary_lines.append("  BULLISH ▲")
             else:
-                summary_lines.append("  BEARISH CROSS")
+                summary_lines.append("  BEARISH ▼")
+            summary_lines.append("\n")
+        
+        # Market dynamics
+        if 'volatility' in stats:
+            summary_lines.append("─── DYNAMICS ───")
+            summary_lines.append(f"Volatility: {stats['volatility']:.2f}%")
+            summary_lines.append(f"ATR: {stats['atr_pct']:.2f}%")
+            summary_lines.append(f"Momentum: {stats['momentum']:+.1f}%")
+            vol_str = stats['volume_strength']
+            summary_lines.append(f"Vol: {vol_str:+.0f}%")
             summary_lines.append("\n")
         
         # Funding rate
@@ -383,6 +419,27 @@ if __name__ == '__main__':
         current_macd = macd_full.iloc[-1]
         current_signal = signal_full.iloc[-1]
         
+        # 计算波动率（标准差）- 市场风险指标
+        volatility = df_display['Close'].pct_change().std() * 100
+        
+        # 计算价格动量（近期与前期对比）
+        recent_avg = df_display.iloc[-10:]['Close'].mean()
+        earlier_avg = df_display.iloc[-30:-10]['Close'].mean() if len(df_display) >= 30 else df_display.iloc[:10]['Close'].mean()
+        momentum = ((recent_avg - earlier_avg) / earlier_avg * 100) if earlier_avg > 0 else 0
+        
+        # 计算成交量强度（近期与平均对比）
+        recent_volume = df_display.iloc[-10:]['Volume'].mean()
+        avg_volume = df_display['Volume'].mean()
+        volume_strength = ((recent_volume - avg_volume) / avg_volume * 100) if avg_volume > 0 else 0
+        
+        # 计算ATR（平均真实波动幅度）- 14周期
+        high_low = df_display['High'] - df_display['Low']
+        high_close = abs(df_display['High'] - df_display['Close'].shift())
+        low_close = abs(df_display['Low'] - df_display['Close'].shift())
+        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        atr = tr.rolling(window=14).mean().iloc[-1]
+        atr_pct = (atr / current_price * 100) if current_price > 0 else 0
+        
         stats = {
             'current_price': current_price,
             'price_change': price_change,
@@ -394,7 +451,12 @@ if __name__ == '__main__':
             'buy_ratio': buy_ratio,
             'rsi': current_rsi,
             'macd': current_macd,
-            'macd_signal': current_signal
+            'macd_signal': current_signal,
+            'volatility': volatility,
+            'momentum': momentum,
+            'volume_strength': volume_strength,
+            'atr': atr,
+            'atr_pct': atr_pct
         }
         
         # Add funding rate info to stats
@@ -412,6 +474,8 @@ if __name__ == '__main__':
         print(f"High: {high_price:.2f} | Low: {low_price:.2f}")
         print(f"Total volume: {total_volume:.2f}")
         print(f"Total trades: {total_trades:,}")
+        print(f"Volatility: {volatility:.2f}% | ATR: {atr_pct:.2f}%")
+        print(f"Momentum: {momentum:+.1f}% | Volume Strength: {volume_strength:+.0f}%")
         print(f"Buy ratio: {buy_ratio:.1f}%")
         
         if funding_info:
