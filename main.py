@@ -4,6 +4,8 @@
 
 import os
 import sys
+import argparse
+import logging
 import pandas as pd
 
 from dotenv import load_dotenv
@@ -15,38 +17,63 @@ from vquant.vision.chart import (
     calculate_rsi, 
     calculate_macd)
 from vquant.analysis.advisor import PositionAdvisor
-from vquant.executor.trader import Trader
+
+
+# 配置日志
+logger = logging.getLogger(__name__)
+
+
+def setup_logging(level=logging.INFO, log_file=None):
+    """Configure logging system"""
+    log_format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+    date_format = '%Y-%m-%d %H:%M:%S'
+    
+    handlers = [logging.StreamHandler()]
+    if log_file:
+        os.makedirs(os.path.dirname(log_file) or '.', exist_ok=True)
+        handlers.append(logging.FileHandler(log_file, encoding='utf-8'))
+    
+    logging.basicConfig(
+        level=level,
+        format=log_format,
+        datefmt=date_format,
+        handlers=handlers
+    )
 
 
 def run(symbol='BTCUSDT', interval='1h', limit=100, 
                          ma_periods=[7, 25, 99], service='copilot', model=None, execute_trade=False):
+    model_display = f"{service.upper()}"
     if service == 'copilot' and model:
-        print(f"AI服务: GitHub Copilot ({model})")
-    else:
-        print(f"AI服务: {service.upper()}")
+        model_display = f"GitHub Copilot ({model})"
+    logger.info(f"AI Service: {model_display}")
+    
     if execute_trade:
-        print("⚠️  交易执行模式已启用")
-    print()
-    # 创建图表目录
+        logger.warning("Trading execution mode enabled")
+    
+    # Create charts directory
     os.makedirs('charts', exist_ok=True)
-    # 1. 获取K线数据
-    print("📈 步骤 1/4: 获取K线数据...")
+    
+    # 1. Fetch K-line data
+    logger.info("Step 1/4: Fetching K-line data...")
     extra_data = max(ma_periods) - 1
     df = fetch_binance_klines(
         symbol=symbol, interval=interval, 
         limit=limit, extra_data=extra_data)
     if df is None:
-        print("❌ 获取数据失败")
+        logger.error("Failed to fetch data")
         return None
-    print(f"✓ 成功获取 {len(df)} 条数据")
-    # 2. 获取资金费率
-    print("\n💰 步骤 2/4: 获取资金费率...")
+    logger.info(f"Successfully fetched {len(df)} data points")
+    
+    # 2. Fetch funding rate
+    logger.info("Step 2/4: Fetching funding rate...")
     funding_info = fetch_funding_rate(symbol=symbol)
     funding_times, funding_rates = fetch_funding_rate_history(symbol=symbol, limit=30)
     if funding_info:
-        print(f"✓ 当前资金费率: {funding_info['rate']:+.4f}%")
-    # 3. 计算指标并生成图表
-    print("\n📊 步骤 3/4: 计算技术指标并生成图表...")
+        logger.info(f"Current funding rate: {funding_info['rate']:+.4f}%")
+    
+    # 3. Calculate indicators and generate chart
+    logger.info("Step 3/4: Calculating technical indicators and generating chart...")
     # 计算均线
     ma_dict = {}
     for period in ma_periods:
@@ -114,29 +141,31 @@ def run(symbol='BTCUSDT', interval='1h', limit=100,
     # 生成图表文件名
     timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
     save_path = f'charts/{symbol}_{interval}_{timestamp}.png'
-    # 绘制图表
+    # Plot candlestick chart
     plot_candlestick(
         df_display, symbol=symbol, save_path=save_path, 
         ma_dict=ma_dict_display, stats=stats)
-    print(f"✓ 图表已保存: {save_path}")
-    # 4. AI分析
-    model_display = f"{service.upper()}"
-    if service == 'copilot' and model:
-        model_display = f"GitHub Copilot ({model})"
-    print(f"\n🤖 步骤 4/4: 使用 {model_display} 进行AI分析...")
+    logger.info(f"Chart saved: {save_path}")
+    
+    # 4. AI analysis
+    logger.info(f"Step 4/4: Performing AI analysis with {model_display}...")
     try:
         advisor = PositionAdvisor(service=service, model=model)
-        result = advisor.analyze(save_path, save_json=True)
+        result = advisor.analyze(save_path, save_json=True, symbol=symbol, current_price=current_price)
         
-        # 如果启用了交易执行，则执行交易
+        # Execute trade if enabled
         if execute_trade and result:
-            print("\n💼 执行交易...")
+            logger.info("Executing trade...")
             try:
+                from vquant.executor.trader import Trader
                 trader = Trader()
                 trader.trade(result)
-                print("✓ 交易执行完成")
+                logger.info("Trade execution completed")
+            except ImportError as import_error:
+                logger.error(f"Failed to import trading module: {import_error}")
+                logger.error("Please ensure binance.fut and binance.auth modules are installed")
             except Exception as trade_error:
-                print(f"❌ 交易执行失败: {trade_error}")
+                logger.error(f"Trade execution failed: {trade_error}", exc_info=True)
         
         return {
             'chart_path': save_path,
@@ -144,12 +173,12 @@ def run(symbol='BTCUSDT', interval='1h', limit=100,
             'analysis': result
         }
     except Exception as e:
-        print(f"❌ AI分析失败: {e}")
-        print(f"\n💡 提示: 请确保设置了正确的API密钥环境变量")
-        print(f"   - GitHub Copilot: GITHUB_TOKEN")
-        print(f"   - OpenAI: OPENAI_API_KEY")
-        print(f"   - 通义千问: DASHSCOPE_API_KEY")
-        print(f"   - DeepSeek: DEEPSEEK_API_KEY")
+        logger.error(f"AI analysis failed: {e}", exc_info=True)
+        logger.info("Tip: Please ensure you have set the correct API key environment variables")
+        logger.info("  - GitHub Copilot: GITHUB_TOKEN")
+        logger.info("  - OpenAI: OPENAI_API_KEY")
+        logger.info("  - Qwen: DASHSCOPE_API_KEY")
+        logger.info("  - DeepSeek: DEEPSEEK_API_KEY")
         return {
             'chart_path': save_path,
             'stats': stats,
@@ -157,22 +186,143 @@ def run(symbol='BTCUSDT', interval='1h', limit=100,
         }
 
 
-def main():
-    """命令行入口"""
-    load_dotenv()
-    # 解析参数
-    symbol = sys.argv[1] if len(sys.argv) > 1 else 'BTCUSDT'
-    interval = sys.argv[2] if len(sys.argv) > 2 else '1h'
-    service = sys.argv[3] if len(sys.argv) > 3 else 'copilot'
-    model = sys.argv[4] if len(sys.argv) > 4 else None
-    execute_trade = '--trade' in sys.argv or '-t' in sys.argv
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(
+        description='Quantitative Trading System - K-line Analysis and Auto Trading',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Analysis only (default)
+  %(prog)s BTCUSDT 1h --service qwen
+  
+  # Analysis and execute trade
+  %(prog)s BTCUSDT 1h --service copilot --model gpt-4o --trade
+  
+  # Enable debug logging
+  %(prog)s BTCUSDT 4h --verbose --log-file logs/trading.log
+        """
+    )
     
-    # 运行分析
-    result = run(symbol=symbol, interval=interval, service=service, model=model, execute_trade=execute_trade)
+    # Basic parameters
+    parser.add_argument(
+        'symbol',
+        type=str,
+        default='BTCUSDT',
+        nargs='?',
+        help='Trading pair symbol (default: BTCUSDT)'
+    )
+    parser.add_argument(
+        'interval',
+        type=str,
+        default='1h',
+        nargs='?',
+        choices=['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'],
+        help='K-line period (default: 1h)'
+    )
+    
+    # AI service configuration
+    parser.add_argument(
+        '--service', '-s',
+        type=str,
+        default='copilot',
+        choices=['copilot', 'openai', 'qwen', 'deepseek'],
+        help='AI service provider (default: copilot)'
+    )
+    parser.add_argument(
+        '--model', '-m',
+        type=str,
+        help='AI model name (copilot options: gpt-4o, claude-3.5-sonnet, o1-preview, etc.)'
+    )
+    
+    # Trading parameters
+    parser.add_argument(
+        '--trade', '-t',
+        action='store_true',
+        help='Enable trading execution mode (default: analysis only)'
+    )
+    parser.add_argument(
+        '--account', '-a',
+        type=str,
+        default='li',
+        help='Trading account name (default: li)'
+    )
+    
+    # Technical parameters
+    parser.add_argument(
+        '--limit', '-l',
+        type=int,
+        default=100,
+        help='Number of K-line data points (default: 100)'
+    )
+    parser.add_argument(
+        '--ma-periods',
+        type=int,
+        nargs='+',
+        default=[7, 25, 99],
+        help='Moving average periods (default: 7 25 99)'
+    )
+    
+    # Logging configuration
+    parser.add_argument(
+        '--verbose', '-v',
+        action='store_true',
+        help='Enable verbose logging output'
+    )
+    parser.add_argument(
+        '--log-file',
+        type=str,
+        help='Log file path'
+    )
+    parser.add_argument(
+        '--quiet', '-q',
+        action='store_true',
+        help='Quiet mode, only output errors'
+    )
+    
+    return parser.parse_args()
+
+
+def main():
+    """Command line entry point"""
+    # Load environment variables
+    load_dotenv()
+    
+    # Parse command line arguments
+    args = parse_arguments()
+    
+    # Configure log level
+    log_level = logging.INFO
+    if args.verbose:
+        log_level = logging.DEBUG
+    elif args.quiet:
+        log_level = logging.ERROR
+    
+    # Initialize logging system
+    setup_logging(level=log_level, log_file=args.log_file)
+    
+    logger.info("="*60)
+    logger.info("Quantitative Trading System Started")
+    logger.info(f"Trading Pair: {args.symbol} | Period: {args.interval}")
+    logger.info("="*60)
+    
+    # Run analysis
+    result = run(
+        symbol=args.symbol,
+        interval=args.interval,
+        limit=args.limit,
+        ma_periods=args.ma_periods,
+        service=args.service,
+        model=args.model,
+        execute_trade=args.trade
+    )
+    
     if result:
-        print("\n✅ 分析完成！")
+        logger.info("="*60)
+        logger.info("Analysis Completed!")
+        logger.info("="*60)
     else:
-        print("\n❌ 分析失败")
+        logger.error("Analysis Failed")
         sys.exit(1)
 
 

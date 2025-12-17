@@ -1,8 +1,12 @@
+import logging
 import requests
 import pandas as pd
 import mplfinance as mpf
 from datetime import datetime
 import os
+
+
+logger = logging.getLogger(__name__)
 
 def calculate_rsi(series, period=14):
     """
@@ -59,7 +63,7 @@ def fetch_funding_rate(symbol='BTCUSDT'):
         }
         
     except Exception as e:
-        print(f"Failed to fetch funding rate: {e}")
+        logger.error(f"Failed to fetch funding rate: {e}")
         return None
 
 def fetch_funding_rate_history(symbol='BTCUSDT', limit=30):
@@ -93,7 +97,7 @@ def fetch_funding_rate_history(symbol='BTCUSDT', limit=30):
         return times, rates
         
     except Exception as e:
-        print(f"Failed to fetch funding rate history: {e}")
+        logger.error(f"Failed to fetch funding rate history: {e}")
         return None, None
 
 def fetch_binance_klines(symbol='BTCUSDT', interval='1h', limit=100, extra_data=0):
@@ -141,7 +145,7 @@ def fetch_binance_klines(symbol='BTCUSDT', interval='1h', limit=100, extra_data=
         return df
         
     except Exception as e:
-        print(f"Failed to fetch data: {e}")
+        logger.error(f"Failed to fetch K-line data: {e}", exc_info=True)
         return None
 
 def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dict=None, stats=None):
@@ -369,8 +373,8 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
     width, height = img.size
     file_size = os.path.getsize(save_path) / 1024  # KB
     tokens = (width * height) / 1024  # 估算token数
-    print(f"Chart saved: {save_path}")
-    print(f"  Resolution: {width}x{height}px ({file_size:.1f} KB, ~{tokens:.0f} tokens)")
+    logger.info(f"Chart saved: {save_path}")
+    logger.debug(f"Resolution: {width}x{height}px ({file_size:.1f} KB, ~{tokens:.0f} tokens)")
 
 if __name__ == '__main__':
     # Configuration
@@ -385,16 +389,16 @@ if __name__ == '__main__':
     # Fetch extra data for MA calculation (need max MA period - 1 extra points)
     extra_data = max(MA_PERIODS) - 1
     
-    print(f"Fetching {SYMBOL} {INTERVAL} kline data from Binance...")
+    logger.info(f"Fetching {SYMBOL} {INTERVAL} kline data from Binance...")
     df = fetch_binance_klines(symbol=SYMBOL, interval=INTERVAL, limit=LIMIT, extra_data=extra_data)
     
     # Fetch funding rate and history
-    print(f"Fetching funding rate for {SYMBOL}...")
+    logger.info(f"Fetching funding rate for {SYMBOL}...")
     funding_info = fetch_funding_rate(symbol=SYMBOL)
     funding_times, funding_rates = fetch_funding_rate_history(symbol=SYMBOL, limit=30)
     
     if df is not None:
-        print(f"Successfully fetched {len(df)} data points (including {extra_data} extra for MA calculation)")
+        logger.info(f"Successfully fetched {len(df)} data points (including {extra_data} extra for MA calculation)")
         
         # Calculate MA on full dataset first
         ma_dict = {}
@@ -475,19 +479,19 @@ if __name__ == '__main__':
         if funding_times and funding_rates:
             stats['funding_history'] = (funding_times, funding_rates)
         
-        print(f"Displaying last {len(df_display)} data points")
-        print(f"\nLatest price: {current_price:.2f}")
-        print(f"Price change: {price_change:+.2f} ({price_change_pct:+.2f}%)")
-        print(f"High: {high_price:.2f} | Low: {low_price:.2f}")
-        print(f"Total volume: {total_volume:.2f}")
-        print(f"Total trades: {total_trades:,}")
-        print(f"Volatility: {volatility:.2f}% | ATR: {atr_pct:.2f}%")
-        print(f"Momentum: {momentum:+.1f}% | Volume Strength: {volume_strength:+.0f}%")
-        print(f"Buy ratio: {buy_ratio:.1f}%")
+        logger.info(f"Displaying last {len(df_display)} data points")
+        logger.info(f"Latest price: {current_price:.2f}")
+        logger.info(f"Price change: {price_change:+.2f} ({price_change_pct:+.2f}%)")
+        logger.info(f"High: {high_price:.2f} | Low: {low_price:.2f}")
+        logger.info(f"Total volume: {total_volume:.2f}")
+        logger.info(f"Total trades: {total_trades:,}")
+        logger.info(f"Volatility: {volatility:.2f}% | ATR: {atr_pct:.2f}%")
+        logger.info(f"Momentum: {momentum:+.1f}% | Volume Strength: {volume_strength:+.0f}%")
+        logger.info(f"Buy ratio: {buy_ratio:.1f}%")
         
         if funding_info:
-            print(f"Funding rate: {funding_info['rate']:+.4f}% (Next: {funding_info['next_time']})")
-            print(f"Mark price: {funding_info['mark_price']:.2f}")
+            logger.info(f"Funding rate: {funding_info['rate']:+.4f}% (Next: {funding_info['next_time']})")
+            logger.info(f"Mark price: {funding_info['mark_price']:.2f}")
         
         # Generate filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')

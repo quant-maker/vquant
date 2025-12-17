@@ -5,32 +5,36 @@
 import os
 import json
 import base64
+import logging
 import requests
 
 from datetime import datetime
 from typing import Optional, Dict, Any
 
 
+logger = logging.getLogger(__name__)
+
+
 class PositionAdvisor:
     """
-    仓位建议器 - 分析K线图并给出-1到1之间的仓位建议
+    Position Advisor - Analyze K-line chart and provide position recommendations between -1 and 1
     
-    仓位含义:
-    -1.0: 满仓做空
-    -0.5: 半仓做空
-     0.0: 空仓观望
-     0.5: 半仓做多
-     1.0: 满仓做多
+    Position meaning:
+    -1.0: Full short position
+    -0.5: Half short position
+     0.0: No position (stay out)
+     0.5: Half long position
+     1.0: Full long position
     """
     
     def __init__(self, service='copilot', api_key=None, base_url=None, model=None):
         """
-        初始化仓位建议器
+        Initialize position advisor
         Args:
-            service: AI服务类型 ('copilot', 'openai', 'qwen', 'deepseek')
-            api_key: API密钥，如果不提供则从环境变量读取
-            base_url: API基础URL（可选）
-            model: 模型名称（Copilot可选: gpt-4o, claude-3.5-sonnet, o1等）
+            service: AI service type ('copilot', 'openai', 'qwen', 'deepseek')
+            api_key: API key, if not provided will read from environment variable
+            base_url: API base URL (optional)
+            model: Model name (Copilot options: gpt-4o, claude-3.5-sonnet, o1, etc.)
         """
         self.service = service.lower()
         self.api_key = api_key or self._get_api_key()
@@ -41,11 +45,11 @@ class PositionAdvisor:
             raise ValueError(f"API key not found. Please set it via parameter or environment variable.")
     
     def _get_api_key(self) -> Optional[str]:
-        """从环境变量获取API密钥"""
+        """Get API key from environment variable"""
         env_vars = {
             'copilot': 'GITHUB_TOKEN',
             'openai': 'OPENAI_API_KEY',
-            'qwen': 'QWEN_API_KEY',  # 改为QWEN_API_KEY以匹配.env
+            'qwen': 'QWEN_API_KEY',  # Changed to QWEN_API_KEY to match .env
             'deepseek': 'DEEPSEEK_API_KEY',
         }
         env_var = env_vars.get(self.service)
@@ -62,9 +66,9 @@ class PositionAdvisor:
         return urls.get(self.service, 'https://api.openai.com/v1')
     
     def _get_default_model(self) -> str:
-        """获取默认模型"""
+        """Get default model"""
         models = {
-            'copilot': 'gpt-4o',  # 也可以是 'claude-3.5-sonnet', 'o1-preview'等
+            'copilot': 'gpt-4o',  # Can also be 'claude-3.5-sonnet', 'o1-preview', etc.
             'openai': 'gpt-4o',
             'qwen': 'qwen-vl-max',
             'deepseek': 'deepseek-chat',
@@ -72,50 +76,50 @@ class PositionAdvisor:
         return models.get(self.service, 'gpt-4o')
     
     def _encode_image(self, image_path: str) -> str:
-        """将图片编码为base64"""
+        """Encode image to base64"""
         with open(image_path, 'rb') as f:
             return base64.b64encode(f.read()).decode('utf-8')
     
     def _build_analysis_prompt(self) -> str:
-        """构建分析提示词"""
-        return """你是一位专业的量化交易分析师。请仔细分析这张加密货币K线图，包括：
+        """Build analysis prompt"""
+        return """You are a professional quantitative trading analyst. Please carefully analyze this cryptocurrency K-line chart, including:
 
-1. **趋势分析**: 当前是上涨、下跌还是盘整趋势
-2. **技术指标**: 
-   - MA均线走势和金叉/死叉信号
-   - RSI是否超买(>70)或超卖(<30)
-   - MACD的多空信号
-3. **量价关系**: 成交量是否配合价格走势
-4. **支撑阻力**: 关键的支撑位和阻力位
-5. **市场情绪**: Buy Ratio反映的多空力量对比
-6. **资金费率**: Funding Rate是否存在极端情况
+1. **Trend Analysis**: Is the current trend upward, downward, or consolidating?
+2. **Technical Indicators**: 
+   - MA moving average trends and golden cross/death cross signals
+   - Is RSI overbought (>70) or oversold (<30)?
+   - MACD bullish/bearish signals
+3. **Volume-Price Relationship**: Does volume confirm price movement?
+4. **Support and Resistance**: Key support and resistance levels
+5. **Market Sentiment**: Buy Ratio reflecting long-short power balance
+6. **Funding Rate**: Are there any extreme situations in the Funding Rate?
 
-基于以上分析，给出一个-1到1之间的仓位建议：
-- **1.0**: 强烈看多，建议满仓做多
-- **0.5到0.9**: 看多，建议半仓到大仓做多
-- **0.1到0.4**: 偏多，建议小仓做多
-- **-0.1到0.1**: 中性，建议空仓观望
-- **-0.4到-0.1**: 偏空，建议小仓做空
-- **-0.9到-0.5**: 看空，建议半仓到大仓做空
-- **-1.0**: 强烈看空，建议满仓做空
+Based on the above analysis, provide a position recommendation between -1 and 1:
+- **1.0**: Strongly bullish, recommend full long position
+- **0.5 to 0.9**: Bullish, recommend half to large long position
+- **0.1 to 0.4**: Slightly bullish, recommend small long position
+- **-0.1 to 0.1**: Neutral, recommend staying out (no position)
+- **-0.4 to -0.1**: Slightly bearish, recommend small short position
+- **-0.9 to -0.5**: Bearish, recommend half to large short position
+- **-1.0**: Strongly bearish, recommend full short position
 
-请以JSON格式返回结果，格式如下：
+Please return the result in JSON format as follows:
 {
     "position": 0.75,
-    "confidence": "高",
-    "trend": "上涨",
-    "reasoning": "详细的分析理由",
-    "risk_warning": "风险提示",
+    "confidence": "high",
+    "trend": "upward",
+    "reasoning": "Detailed analysis reasoning",
+    "risk_warning": "Risk warning",
     "key_levels": {
-        "support": 价格,
-        "resistance": 价格
+        "support": price,
+        "resistance": price
     }
 }
 
-只返回JSON，不要其他内容。"""
+Return only JSON, no other content."""
     
     def _call_copilot_api(self, image_path: str) -> Dict[str, Any]:
-        """调用GitHub Copilot API"""
+        """Call GitHub Copilot API"""
         base64_image = self._encode_image(image_path)
         headers = {
             'Content-Type': 'application/json',
@@ -168,16 +172,16 @@ class PositionAdvisor:
             
             return json.loads(content)
         except json.JSONDecodeError:
-            # 如果无法解析JSON，返回原始内容
+            # If unable to parse JSON, return original content
             return {
                 'position': 0.0,
-                'confidence': '未知',
+                'confidence': 'unknown',
                 'reasoning': content,
                 'error': 'Failed to parse JSON response'
             }
     
     def _call_openai_api(self, image_path: str) -> Dict[str, Any]:
-        """调用OpenAI GPT-4 Vision API"""
+        """Call OpenAI GPT-4 Vision API"""
         base64_image = self._encode_image(image_path)
         
         headers = {
@@ -229,17 +233,17 @@ class PositionAdvisor:
             
             return json.loads(content)
         except json.JSONDecodeError:
-            # 如果无法解析JSON，返回原始内容
+            # If unable to parse JSON, return original content
             return {
                 'position': 0.0,
-                'confidence': '未知',
+                'confidence': 'unknown',
                 'reasoning': content,
                 'error': 'Failed to parse JSON response'
             }
     
     def _call_qwen_api(self, image_path: str) -> Dict[str, Any]:
-        """调用通义千问Qwen-VL API"""
-        # 读取图片并编码
+        """Call Qwen-VL API"""
+        # Read and encode image
         with open(image_path, 'rb') as f:
             image_data = f.read()
         base64_image = base64.b64encode(image_data).decode('utf-8')
@@ -282,7 +286,7 @@ class PositionAdvisor:
         result = response.json()
         content = result['output']['choices'][0]['message']['content'][0]['text']
         
-        # 尝试解析JSON
+        # Try to parse JSON
         try:
             if '```json' in content:
                 content = content.split('```json')[1].split('```')[0].strip()
@@ -293,13 +297,13 @@ class PositionAdvisor:
         except json.JSONDecodeError:
             return {
                 'position': 0.0,
-                'confidence': '未知',
+                'confidence': 'unknown',
                 'reasoning': content,
                 'error': 'Failed to parse JSON response'
             }
     
     def _call_deepseek_api(self, image_path: str) -> Dict[str, Any]:
-        """调用DeepSeek API (如果支持vision)"""
+        """Call DeepSeek API (if vision is supported)"""
         base64_image = self._encode_image(image_path)
         
         headers = {
@@ -351,27 +355,29 @@ class PositionAdvisor:
         except json.JSONDecodeError:
             return {
                 'position': 0.0,
-                'confidence': '未知',
+                'confidence': 'unknown',
                 'reasoning': content,
                 'error': 'Failed to parse JSON response'
             }
     
-    def analyze(self, image_path: str, save_json: bool = True) -> Dict[str, Any]:
+    def analyze(self, image_path: str, save_json: bool = True, symbol: str = None, current_price: float = None) -> Dict[str, Any]:
         """
-        分析图表并给出仓位建议
+        Analyze chart and provide position recommendation
         
         Args:
-            image_path: 图表图片路径
-            save_json: 是否保存分析结果为JSON文件
+            image_path: Chart image path
+            save_json: Whether to save analysis result as JSON file
+            symbol: Trading pair symbol (e.g., BTCUSDT)
+            current_price: Current market price
             
         Returns:
-            包含仓位建议和分析结果的字典
+            Dictionary containing position recommendation and analysis results
         """
         model_display = f"{self.service.upper()}"
         if self.service == 'copilot':
             model_display = f"GitHub Copilot ({self.model})"
-        print(f"正在使用 {model_display} 分析图表...")
-        # 调用对应的API
+        logger.info(f"Analyzing chart with {model_display}: {image_path}")
+        # Call corresponding API
         if self.service == 'copilot':
             result = self._call_copilot_api(image_path)
         elif self.service == 'openai':
@@ -382,20 +388,26 @@ class PositionAdvisor:
             result = self._call_deepseek_api(image_path)
         else:
             raise ValueError(f"Unsupported service: {self.service}")
-        # 添加元数据
+        # Add metadata
         result['timestamp'] = datetime.now().isoformat()
         result['image_path'] = image_path
         result['service'] = self.service
         result['model'] = self.model
-        # 确保position在-1到1之间
+        # Add trading information for Trader
+        if symbol:
+            result['symbol'] = symbol
+        if current_price is not None:
+            result['current_price'] = current_price
+        # Ensure position is between -1 and 1
         if 'position' in result:
             result['position'] = max(-1.0, min(1.0, result['position']))
-        # 保存为JSON
+        # Save as JSON
         if save_json:
             json_path = image_path.rsplit('.', 1)[0] + '.json'
             with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(result, f, ensure_ascii=False, indent=2)
-            print(f"分析结果已保存到: {json_path}")
+            logger.info(f"Analysis result saved to: {json_path}")
+            logger.debug(f"Analysis result: position={result.get('position')}, confidence={result.get('confidence')}")
         return result
     
 
