@@ -225,12 +225,11 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
     # 添加图例 - 只在左侧放置，避免遮挡右边最新行情
     if ma_dict:
         ma_periods = sorted(ma_dict.keys())
-        ma_labels = [f'MA{p}' for p in ma_periods]
         
         # 比较左侧K线的最高点和最低点位置，选择空间更大的一侧
         left_section = df.iloc[:len(df)//3]
         high_avg = left_section['High'].mean()
-        low_avg = left_section['Low'].mean()
+        low_avg = left_section['Low'].min()
         mid_price = (df['High'].max() + df['Low'].min()) / 2
         
         # 如果左侧K线偏向上方，图例放左下；否则放左上
@@ -239,8 +238,16 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         else:
             legend_loc = 'upper left'
         
+        # 创建与MA线颜色对应的图例
+        from matplotlib.lines import Line2D
+        legend_lines = []
+        legend_labels = []
+        for i, period in enumerate(ma_periods):
+            legend_lines.append(Line2D([0], [0], color=ma_colors[i % len(ma_colors)], linewidth=1.5))
+            legend_labels.append(f'MA{period}')
+        
         # 在主图表（第一个axes）添加图例
-        axes[0].legend(ma_labels, loc=legend_loc, fontsize=6, framealpha=0.9, edgecolor='gray')
+        axes[0].legend(legend_lines, legend_labels, loc=legend_loc, fontsize=6, framealpha=0.9, edgecolor='gray')
     
     # 添加关键价格水平（支撑/阻力位）
     if stats:
@@ -269,9 +276,9 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
             pos = ax.get_position()
             ax.set_position([pos.x0 * 0.91, pos.y0, pos.width * 0.91, pos.height])
         
-        # Add summary panel on the right - positioned lower to avoid overlapping chart
-        # [left, bottom, width, height] - 减小height值可以缩短面板高度
-        ax_summary = fig.add_axes([0.81, 0.323, 0.2, 0.40])
+        # Add summary panel on the right - 紧密贴合图表，充分利用空间
+        # [left, bottom, width, height] - 优化面板高度和位置以减少上下留白
+        ax_summary = fig.add_axes([0.733, 0.38, 0.18, 0.28])
         ax_summary.axis('off')
         
         # Build summary text with technical indicators
@@ -343,15 +350,15 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         summary_text = '\n'.join(summary_lines)
         
         # Add background box with text (smaller font for 640x480)
-        bbox_props = dict(boxstyle='round,pad=0.5', facecolor='#F8F8F8', edgecolor='#999999', linewidth=1.2)
+        bbox_props = dict(boxstyle='round,pad=0.4', facecolor='#F8F8F8', edgecolor='#999999', linewidth=1.2)
         ax_summary.text(0.5, 0.5, summary_text, 
                        transform=ax_summary.transAxes,
-                       fontsize=7,
+                       fontsize=6.5,
                        verticalalignment='center',
                        horizontalalignment='center',
                        fontfamily='monospace',
                        bbox=bbox_props,
-                       linespacing=1.3)
+                       linespacing=1.15)
     
     plt.savefig(save_path, dpi=100, bbox_inches='tight', pad_inches=0.1)
     plt.close()
