@@ -34,18 +34,21 @@ Examples:
 """
 
 
-def setup_logging(level=logging.INFO, log_file=None):
+def setup_logging(args):
+    # Configure log level
+    level = logging.INFO
+    if args.verbose:
+        level = logging.DEBUG
+    elif args.quiet:
+        level = logging.ERROR
+    log_file=f"logs/{args.symbol}_{args.interval}.log" if args.log_file is None else args.log_file
     """Configure logging system"""
     log_format = '%(asctime)s %(levelname)s [%(filename)s:%(lineno)d]: %(message)s'
     date_format = '%Y-%m-%d %H:%M:%S'
-    
     handlers = [logging.StreamHandler()]
-    if log_file:
-        os.makedirs(os.path.dirname(log_file) or '.', exist_ok=True)
-        handlers.append(logging.FileHandler(log_file, encoding='utf-8'))
-    
-    logging.basicConfig(
-        level=level, format=log_format, datefmt=date_format, handlers=handlers)
+    os.makedirs(os.path.dirname(log_file) or '.', exist_ok=True)
+    handlers.append(logging.FileHandler(log_file, encoding='utf-8'))
+    logging.basicConfig(level=level, format=log_format, datefmt=date_format, handlers=handlers)
 
 
 def run(args):
@@ -219,7 +222,7 @@ def parse_arguments():
         '--init-pos', type=float, default=0.0,
         help='init pos thant not belongs to this strategy (default: 0.0)')
     parser.add_argument(
-        '--volume', '-v' type=float, default=0.002, # 0.002 BTC
+        '--volume', type=float, default=0.002, # 0.002 BTC
         help='init pos thant not belongs to this strategy (default: 0.0)')
     parser.add_argument(
         '--account', '-a', type=str, default='li',
@@ -247,14 +250,8 @@ def main():
     load_dotenv()
     # Parse command line arguments
     args = parse_arguments()
-    # Configure log level
-    log_level = logging.INFO
-    if args.verbose:
-        log_level = logging.DEBUG
-    elif args.quiet:
-        log_level = logging.ERROR
     # Initialize logging system
-    setup_logging(level=log_level, log_file=args.log_file)
+    setup_logging(args)
     logger.info("="*60)
     logger.info("Quantitative Trading System Started")
     logger.info(f"Trading Pair: {args.symbol} | Period: {args.interval}")
