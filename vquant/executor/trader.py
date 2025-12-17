@@ -25,20 +25,20 @@ class Trader:
         api_key, private_key = load_api_keys(account)
         self.cli = USDM(api_key=api_key, private_key=private_key)
         self.account = account
-        self.init_pos = 0
+        self.init_pos = init_pos
 
-    def trade(self, advisor):
+    def trade(self, advisor, volume):
         """
         Execute trade
         Args:
-            advisor: AI analysis result dict, must contain symbol, position, current_price
+            advisor: AI analysis result dict, must contain symbol, position, price
         """
         symbol = advisor['symbol']
         target = advisor['position']
-        current_price = advisor['current_price']
+        price = round_it(advisor['current_price'], round_at(symbol))
         
         logger.info(f"Checking position for {symbol}...")
-        logger.debug(f"Target position: {target}, current price: {current_price}")
+        logger.debug(f"Target position: {target}, current price: {price}")
         
         # Get current position
         posinfo = self.cli.position(symbol=symbol)
@@ -46,7 +46,7 @@ class Trader:
         logger.info(f"Current position: {curpos}")
         
         # Calculate adjustment volume
-        target = 0.002 if target > 0.5 else -0.002 if target < -0.5 else 0
+        target = volume if target > 0.5 else -volume if target < -0.5 else 0
         volume = target - curpos + self.init_pos
         
         if abs(volume) < 0.001:  # Set a tolerance value
@@ -56,15 +56,15 @@ class Trader:
         # Prepare order
         side = 'BUY' if volume > 0 else 'SELL'
         quantity = round_it(abs(volume), lot_round_at(symbol))
-        logger.info(f"Preparing order: {side} {quantity} {symbol} @ {current_price}")
+        logger.info(f"Preparing order: {side} {quantity} {symbol} @ {price}")
         
         order = dict(
             symbol=symbol, side=side, quantity=quantity,
-            type='LIMIT', timeInForce='GTC', price=current_price)
+            type='LIMIT', timeInForce='GTC', price=price)
         
         try:
-            print(order)
-            # result = self.cli.new_order(**order)
+            logger.info(f"Send {order=}")
+            result = self.cli.new_order(**order)
             logger.info(f"Order successful: OrderID={result.get('orderId', 'N/A')}")
             logger.debug(f"Order details: {result}")
             return result

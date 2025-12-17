@@ -36,7 +36,7 @@ Examples:
 
 def setup_logging(level=logging.INFO, log_file=None):
     """Configure logging system"""
-    log_format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+    log_format = '%(asctime)s %(levelname)s [%(filename)s:%(lineno)d]: %(message)s'
     date_format = '%Y-%m-%d %H:%M:%S'
     
     handlers = [logging.StreamHandler()]
@@ -165,8 +165,8 @@ def run(args):
             logger.info("Executing trade...")
             try:
                 from vquant.executor.trader import Trader
-                trader = Trader()
-                trader.trade(result)
+                trader = Trader(args.init_pos)
+                trader.trade(result, args.volume)
                 logger.info("Trade execution completed")
             except ImportError as import_error:
                 logger.error(f"Failed to import trading module: {import_error}")
@@ -215,6 +215,12 @@ def parse_arguments():
     parser.add_argument(
         '--trade', '-t', action='store_true',
         help='Enable trading execution mode (default: analysis only)')
+    parser.add_argument(
+        '--init-pos', type=float, default=0.0,
+        help='init pos thant not belongs to this strategy (default: 0.0)')
+    parser.add_argument(
+        '--volume', '-v' type=float, default=0.002, # 0.002 BTC
+        help='init pos thant not belongs to this strategy (default: 0.0)')
     parser.add_argument(
         '--account', '-a', type=str, default='li',
         help='Trading account name (default: li)')
