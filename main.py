@@ -36,7 +36,7 @@ Examples:
 
 def setup_logging(level=logging.INFO, log_file=None):
     """Configure logging system"""
-    log_format = '%(asctime)s %(levelname)s [%(filename)s:%(lineno)d]: %(message)s'
+    log_format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
     date_format = '%Y-%m-%d %H:%M:%S'
     
     handlers = [logging.StreamHandler()]
@@ -48,16 +48,14 @@ def setup_logging(level=logging.INFO, log_file=None):
         level=level, format=log_format, datefmt=date_format, handlers=handlers)
 
 
-def run(
-    symbol='BTCUSDC', interval='1h', limit=100, 
-    ma_periods=[7, 25, 99], service='qwen', model=None, execute_trade=False):
+def run(args):
     # main logical
-    model_display = f"{service.upper()}"
-    if service == 'copilot' and model:
-        model_display = f"GitHub Copilot ({model})"
+    model_display = f"{args.service.upper()}"
+    if args.service == 'copilot' and args.model:
+        model_display = f"GitHub Copilot ({args.model})"
     logger.info(f"AI Service: {model_display}")
     
-    if execute_trade:
+    if args.trade:
         logger.warning("Trading execution mode enabled")
     
     # Create charts directory
@@ -65,10 +63,10 @@ def run(
     
     # 1. Fetch K-line data
     logger.info("Step 1/4: Fetching K-line data...")
-    extra_data = max(ma_periods) - 1
+    extra_data = max(args.ma_periods) - 1
     df = fetch_binance_klines(
-        symbol=symbol, interval=interval, 
-        limit=limit, extra_data=extra_data)
+        symbol=args.symbol, interval=args.interval,
+        limit=args.limit, extra_data=extra_data)
     if df is None:
         logger.error("Failed to fetch data")
         return None
@@ -76,8 +74,8 @@ def run(
     
     # 2. Fetch funding rate
     logger.info("Step 2/4: Fetching funding rate...")
-    funding_info = fetch_funding_rate(symbol=symbol)
-    funding_times, funding_rates = fetch_funding_rate_history(symbol=symbol, limit=30)
+    funding_info = fetch_funding_rate(symbol=args.symbol)
+    funding_times, funding_rates = fetch_funding_rate_history(symbol=args.symbol, limit=30)
     if funding_info:
         logger.info(f"Current funding rate: {funding_info['rate']:+.4f}%")
     
@@ -85,13 +83,13 @@ def run(
     logger.info("Step 3/4: Calculating technical indicators and generating chart...")
     # 计算均线
     ma_dict = {}
-    for period in ma_periods:
+    for period in args.ma_periods:
         ma_dict[period] = df['Close'].rolling(window=period).mean()
     # 只显示最后limit条数据
-    df_display = df.iloc[-limit:].copy()
+    df_display = df.iloc[-args.limit:].copy()
     ma_dict_display = {}
     for period, ma_series in ma_dict.items():
-        ma_dict_display[period] = ma_series.iloc[-limit:]
+        ma_dict_display[period] = ma_series.iloc[-args.limit:]
     # 计算统计数据
     current_price = df_display.iloc[-1]['Close']
     first_price = df_display.iloc[0]['Open']
@@ -149,28 +147,25 @@ def run(
         stats['funding_history'] = (funding_times, funding_rates)
     # 生成图表文件名
     timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
-    save_path = f'charts/{symbol}_{interval}_{timestamp}.png'
+    save_path = f'charts/{args.symbol}_{args.interval}_{timestamp}.png'
     # Plot candlestick chart
     plot_candlestick(
-        df_display, symbol=symbol, save_path=save_path, 
+        df_display, symbol=args.symbol, save_path=save_path, 
         ma_dict=ma_dict_display, stats=stats)
     logger.info(f"Chart saved: {save_path}")
     
     # 4. AI analysis
     logger.info(f"Step 4/4: Performing AI analysis with {model_display}...")
     try:
-        advisor = PositionAdvisor(service=service, model=model)
-        result = advisor.analyze(save_path, save_json=True, symbol=symbol, current_price=current_price)
-        #import json
-        #with open("charts/BTCUSDT_1h_20251217_120530.json") as fp:
-        #    result = json.load(fp)
+        advisor = PositionAdvisor(service=args.service, model=args.model)
+        result = advisor.analyze(save_path, save_json=True, symbol=args.symbol, current_price=current_price)
         
         # Execute trade if enabled
-        if execute_trade and result:
+        if args.trade and result:
             logger.info("Executing trade...")
             try:
                 from vquant.executor.trader import Trader
-                trader = Trader(args.init_pos)
+                trader = Trader()
                 trader.trade(result)
                 logger.info("Trade execution completed")
             except ImportError as import_error:
@@ -202,10 +197,10 @@ def parse_arguments():
         epilog=EPILOG)
     # Basic parameters
     parser.add_argument(
-        '--symbol', type=str, default='BTCUSDC', nargs='?',
+        '--symbol', type=str, default='BTCUSDC',
         help='Trading pair symbol (default: BTCUSDC)')
     parser.add_argument(
-        '--interval', type=str, default='1h', nargs='?',
+        '--interval', type=str, default='1h',
         choices=['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'],
         help='K-line period (default: 1h)')
     # AI service configuration
@@ -220,9 +215,6 @@ def parse_arguments():
     parser.add_argument(
         '--trade', '-t', action='store_true',
         help='Enable trading execution mode (default: analysis only)')
-    parser.add_argument(
-        '--init-pos', type=float, default=0.0,
-        help='The initpos which not belongs to this strategy (default: 0.0)')
     parser.add_argument(
         '--account', '-a', type=str, default='li',
         help='Trading account name (default: li)')
@@ -262,14 +254,7 @@ def main():
     logger.info(f"Trading Pair: {args.symbol} | Period: {args.interval}")
     logger.info("="*60)
     # Run analysis
-    result = run(
-        symbol=args.symbol,
-        interval=args.interval,
-        limit=args.limit,
-        ma_periods=args.ma_periods,
-        service=args.service,
-        model=args.model,
-        execute_trade=args.trade)
+    result = run(args)
     if result:
         logger.info("="*60)
         logger.info("Analysis Completed!")
