@@ -5,6 +5,8 @@
 import logging
 from binance.fut.usdm import USDM
 from binance.auth.utils import load_api_keys
+from strategy.common.utils import round_at, lot_round_at
+from strategy.common.utils import cancel_all, round_it
 
 
 logger = logging.getLogger(__name__)
@@ -13,7 +15,7 @@ logger = logging.getLogger(__name__)
 class Trader:
     """Trade Executor - Execute trades based on AI analysis results"""
     
-    def __init__(self, account: str = 'li'):
+    def __init__(self, init_pos, account: str = 'li'):
         """
         Initialize trader
         Args:
@@ -23,7 +25,8 @@ class Trader:
         api_key, private_key = load_api_keys(account)
         self.cli = USDM(api_key=api_key, private_key=private_key)
         self.account = account
-    
+        self.init_pos = 0
+
     def trade(self, advisor):
         """
         Execute trade
@@ -38,12 +41,13 @@ class Trader:
         logger.debug(f"Target position: {target}, current price: {current_price}")
         
         # Get current position
-        account_info = self.cli.account(symbol=symbol)
-        curpos = float(account_info['positionAmt'])
+        posinfo = self.cli.position(symbol=symbol)
+        curpos = float(posinfo[0]['positionAmt'])
         logger.info(f"Current position: {curpos}")
         
         # Calculate adjustment volume
-        volume = target - curpos
+        target = 0.002 if target > 0.5 else -0.002 if target < -0.5 else 0
+        volume = target - curpos + self.init_pos
         
         if abs(volume) < 0.001:  # Set a tolerance value
             logger.info("Current position already at target, no adjustment needed")
@@ -51,21 +55,16 @@ class Trader:
         
         # Prepare order
         side = 'BUY' if volume > 0 else 'SELL'
-        quantity = abs(volume)
-        
+        quantity = round_it(abs(volume), lot_round_at(symbol))
         logger.info(f"Preparing order: {side} {quantity} {symbol} @ {current_price}")
         
         order = dict(
-            symbol=symbol, 
-            side=side, 
-            quantity=quantity,
-            type='LIMIT', 
-            timeInForce='GTC', 
-            price=current_price
-        )
+            symbol=symbol, side=side, quantity=quantity,
+            type='LIMIT', timeInForce='GTC', price=current_price)
         
         try:
-            result = self.cli.new_order(**order)
+            print(order)
+            # result = self.cli.new_order(**order)
             logger.info(f"Order successful: OrderID={result.get('orderId', 'N/A')}")
             logger.debug(f"Order details: {result}")
             return result

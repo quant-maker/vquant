@@ -24,19 +24,19 @@ logger = logging.getLogger(__name__)
 EPILOG = """
 Examples:
   # Analysis only (default)
-  %(prog)s --symbol BTCUSDT --interval 1h --service qwen
+  %(prog)s --symbol BTCUSDC --interval 1h --service qwen
   
   # Analysis and execute trade
-  %(prog)s --symbol BTCUSDT --interval 1h --service copilot --model gpt-4o --trade
+  %(prog)s --symbol BTCUSDC --interval 1h --service copilot --model gpt-4o --trade
   
   # Enable debug logging
-  %(prog)s --symbol BTCUSDT --interval 4h --verbose --log-file logs/trading.log
+  %(prog)s --symbol BTCUSDC --interval 4h --verbose --log-file logs/trading.log
 """
 
 
 def setup_logging(level=logging.INFO, log_file=None):
     """Configure logging system"""
-    log_format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+    log_format = '%(asctime)s %(levelname)s [%(filename)s:%(lineno)d]: %(message)s'
     date_format = '%Y-%m-%d %H:%M:%S'
     
     handlers = [logging.StreamHandler()]
@@ -49,7 +49,7 @@ def setup_logging(level=logging.INFO, log_file=None):
 
 
 def run(
-    symbol='BTCUSDT', interval='1h', limit=100, 
+    symbol='BTCUSDC', interval='1h', limit=100, 
     ma_periods=[7, 25, 99], service='qwen', model=None, execute_trade=False):
     # main logical
     model_display = f"{service.upper()}"
@@ -161,13 +161,16 @@ def run(
     try:
         advisor = PositionAdvisor(service=service, model=model)
         result = advisor.analyze(save_path, save_json=True, symbol=symbol, current_price=current_price)
+        #import json
+        #with open("charts/BTCUSDT_1h_20251217_120530.json") as fp:
+        #    result = json.load(fp)
         
         # Execute trade if enabled
         if execute_trade and result:
             logger.info("Executing trade...")
             try:
                 from vquant.executor.trader import Trader
-                trader = Trader()
+                trader = Trader(args.init_pos)
                 trader.trade(result)
                 logger.info("Trade execution completed")
             except ImportError as import_error:
@@ -199,8 +202,8 @@ def parse_arguments():
         epilog=EPILOG)
     # Basic parameters
     parser.add_argument(
-        '--symbol', type=str, default='BTCUSDT', nargs='?',
-        help='Trading pair symbol (default: BTCUSDT)')
+        '--symbol', type=str, default='BTCUSDC', nargs='?',
+        help='Trading pair symbol (default: BTCUSDC)')
     parser.add_argument(
         '--interval', type=str, default='1h', nargs='?',
         choices=['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'],
@@ -217,6 +220,9 @@ def parse_arguments():
     parser.add_argument(
         '--trade', '-t', action='store_true',
         help='Enable trading execution mode (default: analysis only)')
+    parser.add_argument(
+        '--init-pos', type=float, default=0.0,
+        help='The initpos which not belongs to this strategy (default: 0.0)')
     parser.add_argument(
         '--account', '-a', type=str, default='li',
         help='Trading account name (default: li)')
