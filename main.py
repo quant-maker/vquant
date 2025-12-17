@@ -41,13 +41,16 @@ def setup_logging(args):
         level = logging.DEBUG
     elif args.quiet:
         level = logging.ERROR
-    log_file=f"logs/{args.symbol}_{args.interval}.log" if args.log_file is None else args.log_file
     """Configure logging system"""
     log_format = '%(asctime)s %(levelname)s [%(filename)s:%(lineno)d]: %(message)s'
     date_format = '%Y-%m-%d %H:%M:%S'
-    handlers = [logging.StreamHandler()]
-    os.makedirs(os.path.dirname(log_file) or '.', exist_ok=True)
-    handlers.append(logging.FileHandler(log_file, encoding='utf-8'))
+    if args.log_file == "auto":
+        args.log_file = f"logs/{args.symbol}_{args.interval}.log"
+    if args.log_file:
+        os.makedirs(os.path.dirname(args.log_file) or '.', exist_ok=True)
+        handlers = [logging.FileHandler(args.log_file, encoding='utf-8')]
+    else:
+        handlers = [logging.StreamHandler(sys.stdout)]
     logging.basicConfig(level=level, format=log_format, datefmt=date_format, handlers=handlers)
 
 
