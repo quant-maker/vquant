@@ -62,6 +62,40 @@ def fetch_funding_rate(symbol='BTCUSDT'):
         print(f"Failed to fetch funding rate: {e}")
         return None
 
+def fetch_funding_rate_history(symbol='BTCUSDT', limit=30):
+    """
+    获取历史资金费率数据
+    
+    参数:
+        symbol: 交易对
+        limit: 获取的历史记录数量
+    """
+    url = 'https://fapi.binance.com/fapi/v1/fundingRate'
+    params = {
+        'symbol': symbol,
+        'limit': limit
+    }
+    
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        times = []
+        rates = []
+        
+        for item in data:
+            timestamp = int(item['fundingTime']) / 1000
+            dt = datetime.fromtimestamp(timestamp)
+            times.append(dt)
+            rates.append(float(item['fundingRate']) * 100)  # 转换为百分比
+        
+        return times, rates
+        
+    except Exception as e:
+        print(f"Failed to fetch funding rate history: {e}")
+        return None, None
+
 def fetch_binance_klines(symbol='BTCUSDT', interval='1h', limit=100, extra_data=0):
     """
     从币安API拉取K线数据
@@ -208,7 +242,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
             ax.set_position([pos.x0 * 0.91, pos.y0, pos.width * 0.91, pos.height])
         
         # Add summary panel on the right - positioned higher to avoid y-axis overlap
-        ax_summary = fig.add_axes([0.71, 0.28, 0.27, 0.60])
+        ax_summary = fig.add_axes([0.665, 0.38, 0.315, 0.50])
         ax_summary.axis('off')
         
         # Build summary text with technical indicators
@@ -280,6 +314,41 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
                        bbox=bbox_props,
                        linespacing=1.5)
     
+    # Add funding rate history chart in the bottom right corner
+    if 'funding_history' in stats and stats['funding_history'] is not None:
+        times, rates = stats['funding_history']
+        if times and rates:
+            ax_funding = fig.add_axes([0.78, 0.15, 0.20, 0.18])
+            
+            # Plot funding rate history
+            colors = ['red' if r > 0 else 'green' for r in rates]
+            ax_funding.bar(range(len(rates)), rates, color=colors, alpha=0.7, width=0.8)
+            ax_funding.axhline(y=0, color='gray', linestyle='-', linewidth=0.8, alpha=0.5)
+            
+            # Styling
+            ax_funding.set_title('Funding Rate History', fontsize=9, fontweight='bold', pad=5)
+            ax_funding.set_ylabel('%', fontsize=8)
+            ax_funding.yaxis.tick_right()
+            ax_funding.yaxis.set_label_position('right')
+            ax_funding.tick_params(axis='both', labelsize=7)
+            ax_funding.grid(True, alpha=0.3, linewidth=0.5)
+            
+            # X-axis labels (show only a few)
+            tick_positions = [0, len(rates)//2, len(rates)-1]
+            tick_labels = [times[i].strftime('%m-%d') for i in tick_positions]
+            ax_funding.set_xticks(tick_positions)
+            ax_funding.set_xticklabels(tick_labels, fontsize=7)
+            
+            # Add current value annotation
+            if rates:
+                current_rate = rates[-1]
+                ax_funding.text(0.98, 0.95, f'Current: {current_rate:+.4f}%',
+                              transform=ax_funding.transAxes,
+                              fontsize=7,
+                              verticalalignment='top',
+                              horizontalalignment='right',
+                              bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='gray'))
+    
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
     plt.close()
     
@@ -301,9 +370,10 @@ if __name__ == '__main__':
     print(f"Fetching {SYMBOL} {INTERVAL} kline data from Binance...")
     df = fetch_binance_klines(symbol=SYMBOL, interval=INTERVAL, limit=LIMIT, extra_data=extra_data)
     
-    # Fetch funding rate
+    # Fetch funding rate and history
     print(f"Fetching funding rate for {SYMBOL}...")
     funding_info = fetch_funding_rate(symbol=SYMBOL)
+    funding_times, funding_rates = fetch_funding_rate_history(symbol=SYMBOL, limit=30)
     
     if df is not None:
         print(f"Successfully fetched {len(df)} data points (including {extra_data} extra for MA calculation)")
@@ -357,6 +427,10 @@ if __name__ == '__main__':
             stats['funding_rate'] = funding_info['rate']
             stats['funding_next'] = funding_info['next_time']
         
+        # Add funding rate history
+        if funding_times and funding_rates:
+            stats['funding_history'] = (funding_times, funding_rates)
+        
         print(f"Displaying last {len(df_display)} data points")
         print(f"\nLatest price: {current_price:.2f}")
         print(f"Price change: {price_change:+.2f} ({price_change_pct:+.2f}%)")
@@ -375,3 +449,16 @@ if __name__ == '__main__':
         
         # Plot candlestick chart with MA lines and statistics
         plot_candlestick(df_display, symbol=SYMBOL, save_path=save_path, ma_dict=ma_dict_display, stats=stats)
+        
+        # Optional: Analyze chart with AI
+        # Uncomment the following lines to enable automatic analysis
+        """
+        print("\nAnalyzing chart with AI...")
+        from chart_analyzer_api import ChartAnalyzerAPI
+        # 使用通义千问: service='qwen'
+        # 使用智谱GLM-4V: service='glm'
+        # 使用文心一言: service='wenxin'
+        analyzer = ChartAnalyzerAPI(service='qwen')
+        analyzer.analyze_chart_and_save(save_path, save_json=True)
+        print("Analysis completed!")
+        """

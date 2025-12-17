@@ -1,6 +1,21 @@
-charts
 *.png
 *.csv
 *.txt
 *.swap
 *.so
+.env
+
+# folders
+__pycache__/
+venv/
+env/
+.idea/
+.mypy_cache/
+.vscode/
+.DS_Store
+charts
+chrome_profile
+logs
+output
+temp
+# files
