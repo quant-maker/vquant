@@ -4,8 +4,8 @@
 
 import os
 import sys
-import argparse
 import logging
+import argparse
 import pandas as pd
 
 from dotenv import load_dotenv
@@ -21,6 +21,17 @@ from vquant.analysis.advisor import PositionAdvisor
 
 # 配置日志
 logger = logging.getLogger(__name__)
+EPILOG = """
+Examples:
+  # Analysis only (default)
+  %(prog)s --symbol BTCUSDT --interval 1h --service qwen
+  
+  # Analysis and execute trade
+  %(prog)s --symbol BTCUSDT --interval 1h --service copilot --model gpt-4o --trade
+  
+  # Enable debug logging
+  %(prog)s --symbol BTCUSDT --interval 4h --verbose --log-file logs/trading.log
+"""
 
 
 def setup_logging(level=logging.INFO, log_file=None):
@@ -34,15 +45,13 @@ def setup_logging(level=logging.INFO, log_file=None):
         handlers.append(logging.FileHandler(log_file, encoding='utf-8'))
     
     logging.basicConfig(
-        level=level,
-        format=log_format,
-        datefmt=date_format,
-        handlers=handlers
-    )
+        level=level, format=log_format, datefmt=date_format, handlers=handlers)
 
 
-def run(symbol='BTCUSDT', interval='1h', limit=100, 
-                         ma_periods=[7, 25, 99], service='copilot', model=None, execute_trade=False):
+def run(
+    symbol='BTCUSDT', interval='1h', limit=100, 
+    ma_periods=[7, 25, 99], service='qwen', model=None, execute_trade=False):
+    # main logical
     model_display = f"{service.upper()}"
     if service == 'copilot' and model:
         model_display = f"GitHub Copilot ({model})"
@@ -179,11 +188,7 @@ def run(symbol='BTCUSDT', interval='1h', limit=100,
         logger.info("  - OpenAI: OPENAI_API_KEY")
         logger.info("  - Qwen: DASHSCOPE_API_KEY")
         logger.info("  - DeepSeek: DEEPSEEK_API_KEY")
-        return {
-            'chart_path': save_path,
-            'stats': stats,
-            'analysis': None
-        }
+        return {'chart_path': save_path, 'stats': stats, 'analysis': None}
 
 
 def parse_arguments():
@@ -191,95 +196,44 @@ def parse_arguments():
     parser = argparse.ArgumentParser(
         description='Quantitative Trading System - K-line Analysis and Auto Trading',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Analysis only (default)
-  %(prog)s BTCUSDT 1h --service qwen
-  
-  # Analysis and execute trade
-  %(prog)s BTCUSDT 1h --service copilot --model gpt-4o --trade
-  
-  # Enable debug logging
-  %(prog)s BTCUSDT 4h --verbose --log-file logs/trading.log
-        """
-    )
-    
+        epilog=EPILOG)
     # Basic parameters
     parser.add_argument(
-        'symbol',
-        type=str,
-        default='BTCUSDT',
-        nargs='?',
-        help='Trading pair symbol (default: BTCUSDT)'
-    )
+        '--symbol', type=str, default='BTCUSDT', nargs='?',
+        help='Trading pair symbol (default: BTCUSDT)')
     parser.add_argument(
-        'interval',
-        type=str,
-        default='1h',
-        nargs='?',
+        '--interval', type=str, default='1h', nargs='?',
         choices=['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'],
-        help='K-line period (default: 1h)'
-    )
-    
+        help='K-line period (default: 1h)')
     # AI service configuration
     parser.add_argument(
-        '--service', '-s',
-        type=str,
-        default='copilot',
+        '--service', '-s', type=str, default='qwen',
         choices=['copilot', 'openai', 'qwen', 'deepseek'],
-        help='AI service provider (default: copilot)'
-    )
+        help='AI service provider (default: copilot)')
     parser.add_argument(
-        '--model', '-m',
-        type=str,
-        help='AI model name (copilot options: gpt-4o, claude-3.5-sonnet, o1-preview, etc.)'
-    )
-    
+        '--model', '-m', type=str,
+        help='AI model name (copilot options: gpt-4o, claude-3.5-sonnet, o1-preview, etc.)')
     # Trading parameters
     parser.add_argument(
-        '--trade', '-t',
-        action='store_true',
-        help='Enable trading execution mode (default: analysis only)'
-    )
+        '--trade', '-t', action='store_true',
+        help='Enable trading execution mode (default: analysis only)')
     parser.add_argument(
-        '--account', '-a',
-        type=str,
-        default='li',
-        help='Trading account name (default: li)'
-    )
-    
+        '--account', '-a', type=str, default='li',
+        help='Trading account name (default: li)')
     # Technical parameters
     parser.add_argument(
-        '--limit', '-l',
-        type=int,
-        default=100,
-        help='Number of K-line data points (default: 100)'
-    )
+        '--limit', '-l', type=int, default=100,
+        help='Number of K-line data points (default: 100)')
     parser.add_argument(
-        '--ma-periods',
-        type=int,
-        nargs='+',
-        default=[7, 25, 99],
-        help='Moving average periods (default: 7 25 99)'
-    )
-    
+        '--ma-periods', type=int, nargs='+', default=[7, 25, 99],
+        help='Moving average periods (default: 7 25 99)')
     # Logging configuration
     parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help='Enable verbose logging output'
-    )
+        '--verbose', '-v', action='store_true', help='Enable verbose logging output')
     parser.add_argument(
-        '--log-file',
-        type=str,
-        help='Log file path'
-    )
+        '--log-file', type=str, help='Log file path')
     parser.add_argument(
-        '--quiet', '-q',
-        action='store_true',
-        help='Quiet mode, only output errors'
-    )
-    
+        '--quiet', '-q', action='store_true', help='Quiet mode, only output errors')
     return parser.parse_args()
 
 
@@ -287,25 +241,20 @@ def main():
     """Command line entry point"""
     # Load environment variables
     load_dotenv()
-    
     # Parse command line arguments
     args = parse_arguments()
-    
     # Configure log level
     log_level = logging.INFO
     if args.verbose:
         log_level = logging.DEBUG
     elif args.quiet:
         log_level = logging.ERROR
-    
     # Initialize logging system
     setup_logging(level=log_level, log_file=args.log_file)
-    
     logger.info("="*60)
     logger.info("Quantitative Trading System Started")
     logger.info(f"Trading Pair: {args.symbol} | Period: {args.interval}")
     logger.info("="*60)
-    
     # Run analysis
     result = run(
         symbol=args.symbol,
@@ -314,9 +263,7 @@ def main():
         ma_periods=args.ma_periods,
         service=args.service,
         model=args.model,
-        execute_trade=args.trade
-    )
-    
+        execute_trade=args.trade)
     if result:
         logger.info("="*60)
         logger.info("Analysis Completed!")
