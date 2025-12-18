@@ -185,15 +185,10 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
     
     if ma_dict:
         ma_periods = sorted(ma_dict.keys())
-        title_ma = '/'.join([f'MA{p}' for p in ma_periods])
-        
         for i, period in enumerate(ma_periods):
             add_plots.append(
                 mpf.make_addplot(ma_dict[period], color=ma_colors[i % len(ma_colors)], width=0.6)
             )
-    else:
-        title_ma = ''
-    
     # Calculate RSI and MACD - 优先使用传入的指标数据（已在完整数据上计算）
     if stats and 'rsi_series' in stats:
         rsi = stats['rsi_series']
@@ -292,12 +287,12 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         
         # Add summary panel on the right - 紧密贴合图表，充分利用空间
         # [left, bottom, width, height] - 优化面板高度和位置以减少上下留白
-        ax_summary = fig.add_axes([0.7, 0.38, 0.18, 0.28])
+        ax_summary = fig.add_axes([0.70, 0.38, 0.18, 0.28])
         ax_summary.axis('off')
         
         # Build summary text with technical indicators
         summary_lines = []
-        summary_lines.append(f"\n=== {symbol} ===")
+        summary_lines.append(f"\n= {symbol} =")
         
         # Price info
         summary_lines.append(f"Price: ${stats['current_price']:,.2f}")
@@ -313,7 +308,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         
         # Market sentiment
         buy_ratio = stats['buy_ratio']
-        summary_lines.append("\n─── SENTIMENT ───")
+        summary_lines.append("\n── SENTIMENT ──")
         summary_lines.append(f"Buy Ratio: {buy_ratio:.1f}%")
         if buy_ratio > 52:
             summary_lines.append("Signal: BULLISH ▲")
