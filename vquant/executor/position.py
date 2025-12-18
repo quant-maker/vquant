@@ -232,15 +232,3 @@ class PositionManager:
             Order state dict or None
         """
         return self._load_order_state()
-    
-    def cleanup(self):
-        """
-        Cleanup resources (remove lock file)
-        Should be called when strategy exits
-        """
-        try:
-            if os.path.exists(self.lock_file):
-                os.remove(self.lock_file)
-                logger.info(f"Removed lock file for strategy '{self.name}'")
-        except Exception as e:
-            logger.error(f"Failed to remove lock file: {e}")
