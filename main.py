@@ -180,20 +180,20 @@ def run(args):
     # 4. AI analysis
     logger.info(f"Step 4/4: Performing AI analysis with {model_display}...")
     try:
-        # advisor = PositionAdvisor(service=args.service, model=args.model)
-        # result = advisor.analyze(
-        #     image_path=save_path, 
-        #     image_bytes=image_bytes, 
-        #     symbol=args.symbol, 
-        #     interval=args.interval, 
-        #     current_price=current_price)
+        advisor = PositionAdvisor(service=args.service, model=args.model)
+        result = advisor.analyze(
+            image_path=save_path, 
+            image_bytes=image_bytes, 
+            symbol=args.symbol, 
+            interval=args.interval, 
+            current_price=current_price)
         
         # Execute trade if enabled
         if args.trade and result:
             logger.info("Executing trade...")
             try:
                 from vquant.executor.trader import Trader
-                trader = Trader(args.init_pos, account=args.account)
+                trader = Trader(args.init_pos, account=args.account, strategy_id=args.strategy_id)
                 trader.trade(result, args)
                 logger.info("Trade execution completed")
             except ImportError as import_error:
@@ -255,6 +255,9 @@ def parse_arguments():
     parser.add_argument(
         '--account', '-a', type=str, default='li',
         help='Trading account name (default: li)')
+    parser.add_argument(
+        '--strategy-id', type=str, default='default',
+        help='Strategy identifier to distinguish positions from different strategies (default: default)')
     # Technical parameters
     parser.add_argument(
         '--limit', '-l', type=int, default=72,

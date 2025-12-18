@@ -7,6 +7,7 @@ from binance.fut.usdm import USDM
 from binance.auth.utils import load_api_keys
 from strategy.common.utils import round_at, lot_round_at
 from strategy.common.utils import cancel_all, round_it
+from vquant.executor.position import PositionManager
 
 
 logger = logging.getLogger(__name__)
@@ -15,21 +16,30 @@ logger = logging.getLogger(__name__)
 class Trader:
     """Trade Executor - Execute trades based on AI analysis results"""
     
-    def __init__(self, init_pos, account: str = 'li'):
+    def __init__(self, init_pos, account: str = 'li', strategy_id: str = 'default'):
         """
         Initialize trader
         Args:
             account: Trading account name
+            strategy_id: Strategy identifier to distinguish positions from different strategies
         """
-        logger.debug(f"Initializing trader, account: {account}")
+        logger.debug(f"Initializing trader, account: {account}, strategy_id: {strategy_id}")
         api_key, private_key = load_api_keys(account)
         self.cli = USDM(api_key=api_key, private_key=private_key)
         self.account = account
         self.init_pos = init_pos
+        self.strategy_id = strategy_id
+        
+        # Initialize position manager
+        self.pm = PositionManager(self.cli, strategy_id)
 
     def trade(self, advisor, args):
         """
-        Execute trade
+        Execute trade with single order strategy:
+        1. Check and cancel previous unfilled order
+        2. Calculate target position based on current holdings
+        3. Place new order if needed
+        
         Args:
             advisor: AI analysis result dict, must contain symbol, position, price
         """
@@ -37,34 +47,30 @@ class Trader:
         target = advisor['position']
         price = round_it(advisor['current_price'], round_at(symbol))
         
-        logger.info(f"Checking position for {symbol}...")
-        logger.debug(f"Target position: {target}, current price: {price}")
-        
-        # Get current position
-        posinfo = self.cli.position(symbol=symbol)
-        curpos = float(posinfo[0]['positionAmt']) if posinfo else 0
-        logger.info(f"Current position: {curpos}")
-        
-        # Calculate adjustment volume
+        # Step 1: Get current position (will check and handle previous order automatically)
+        curpos = self.pm.get_current_position(symbol)
+        # Step 2: Calculate target volume
         # target = args.volume if target > args.threshold else -args.volume if target < -args.threshold else 0
-        target = (args.volume * target) # here target is weighted position ratio and volume is max position size
-        volume = target - curpos + self.init_pos
+        target_pos = (args.volume * target)  # target is weighted position ratio [-1, 1]
+        volume = target_pos - curpos + self.init_pos
         quantity = round_it(abs(volume), lot_round_at(symbol))
-        if float(quantity) == 0:  # Set a tolerance value
-            logger.info("Current position already at target, no adjustment needed")
+        if float(quantity) == 0:
+            logger.info("Position already at target, no adjustment needed")
             return
-        # Prepare order
+        # Step 3: Place new order
         side = 'BUY' if volume > 0 else 'SELL'
-        logger.info(f"Preparing order: {side} {quantity} {symbol} @ {price}")
         order = dict(
             symbol=symbol, side=side, quantity=quantity,
             type='LIMIT', timeInForce='GTC', price=price)
         try:
-            logger.info(f"Send {order=}")
+            logger.info(f"Sending order: {order}")
             result = self.cli.new_order(**order)
-            logger.info(f"Order successful: OrderID={result.get('orderId', 'N/A')}")
+            order_id = result.get('orderId')
+            logger.info(f"Order placed successfully: OrderID={order_id}")
             logger.debug(f"Order details: {result}")
+            # Save order state with current position (before this order)
+            self.pm.save_new_order(symbol, order_id, side, float(quantity), curpos)
             return result
         except Exception as e:
-            logger.error(f"Order failed: {e}", exc_info=True)
-            raise
+            logger.exception(f"Order failed: {e}", exc_info=True)
+            raise e
