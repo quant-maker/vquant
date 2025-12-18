@@ -44,22 +44,29 @@ class Trader:
         """
         symbol = advisor['symbol']
         target = advisor['position']
-        price = round_it(advisor['current_price'], round_at(symbol))
+        fprice = advisor['current_price']
+        price = round_it(fprice, round_at(symbol))
         # Step 1: Get current position (will check and handle previous order automatically)
         curpos = self.pm.get_current_position()
         # Step 2: Calculate target volume
         # target = args.volume if target > args.threshold else -args.volume if target < -args.threshold else 0
         target_pos = (args.volume * target)  # target is weighted position ratio [-1, 1]
         volume = target_pos - curpos # volume to trade
+        is_open = (curpos == 0) or (curpos * volume > 0)
         quantity = round_it(abs(volume), lot_round_at(symbol))
         if float(quantity) == 0:
             logger.info("Position already at target, no adjustment needed")
+            return
+        if is_open and (volume * fprice < 5.2):
+            logger.warning(f"Order value too small to open new position: {volume} * {fprice} < 5.2")
             return
         # Step 3: Place new order
         side = 'BUY' if volume > 0 else 'SELL'
         order = dict(
             symbol=symbol, side=side, quantity=quantity,
             type='LIMIT', timeInForce='GTC', price=price)
+        if not is_open:
+            order['reduceOnly'] = True
         try:
             logger.info(f"Sending order: {order}")
             result = self.cli.new_order(**order)

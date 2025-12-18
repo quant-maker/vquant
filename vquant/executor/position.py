@@ -25,7 +25,7 @@ class PositionManager:
         # Order state file for tracking pending orders
         self.state_dir = 'positions'
         os.makedirs(self.state_dir, exist_ok=True)
-        self.state_file = os.path.join(self.state_dir, f'{name}_order_state.json')
+        self.state_file = os.path.join(self.state_dir, f'{name}_pos.json')
         # Check for duplicate strategy instances
         if os.path.exists(self.state_file):
             logger.error("Please use a different strategy name (--name) or stop the existing instance.")
