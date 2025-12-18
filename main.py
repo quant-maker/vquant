@@ -180,13 +180,13 @@ def run(args):
     # 4. AI analysis
     logger.info(f"Step 4/4: Performing AI analysis with {model_display}...")
     try:
-        advisor = PositionAdvisor(service=args.service, model=args.model)
-        result = advisor.analyze(
-            image_path=save_path, 
-            image_bytes=image_bytes, 
-            symbol=args.symbol, 
-            interval=args.interval, 
-            current_price=current_price)
+        # advisor = PositionAdvisor(service=args.service, model=args.model)
+        # result = advisor.analyze(
+        #     image_path=save_path, 
+        #     image_bytes=image_bytes, 
+        #     symbol=args.symbol, 
+        #     interval=args.interval, 
+        #     current_price=current_price)
         
         # Execute trade if enabled
         if args.trade and result:

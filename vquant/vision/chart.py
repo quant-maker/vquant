@@ -281,23 +281,23 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
     
     # Expand figure to make room for summary panel on the right
     if stats:
-        # 保持总分辨率在640x480左右，但加宽以容纳统计面板
-        # 7.2x4.8 @ DPI=100 = 720x480像素 = ~346 tokens
-        fig.set_size_inches(7.2, 4.8)
+        # 640x480像素
+        # 6.4x4.8 @ DPI=100 = 640x480像素 = ~300 tokens
+        fig.set_size_inches(6.4, 4.8)
         
         # Adjust existing axes to make room on the right (maximize chart space)
         for ax in fig.get_axes():
             pos = ax.get_position()
-            ax.set_position([pos.x0 * 0.91, pos.y0, pos.width * 0.91, pos.height])
+            ax.set_position([pos.x0 * 0.88, pos.y0, pos.width * 0.88, pos.height])
         
         # Add summary panel on the right - 紧密贴合图表，充分利用空间
         # [left, bottom, width, height] - 优化面板高度和位置以减少上下留白
-        ax_summary = fig.add_axes([0.733, 0.38, 0.18, 0.28])
+        ax_summary = fig.add_axes([0.7, 0.38, 0.18, 0.28])
         ax_summary.axis('off')
         
         # Build summary text with technical indicators
         summary_lines = []
-        summary_lines.append(f"═ {symbol} ═\n")
+        summary_lines.append(f"=== {symbol} ===")
         
         # Price info
         summary_lines.append(f"Price: ${stats['current_price']:,.2f}")
@@ -305,15 +305,15 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         summary_lines.append(f"Change: {change_symbol} {abs(stats['price_change_pct']):.2f}%\n")
         
         summary_lines.append(f"Range: ${stats['low']:,.2f}")
-        summary_lines.append(f"  ~ ${stats['high']:,.2f}\n")
+        summary_lines.append(f"  ~ ${stats['high']:,.2f}")
         
-        # Volume and trades
-        summary_lines.append(f"Volume: {stats['total_volume']:,.1f}")
-        summary_lines.append(f"Trades: {stats['total_trades']:,}\n")
+        # # Volume and trades
+        # summary_lines.append(f"Volume: {stats['total_volume']:,.1f}")
+        # summary_lines.append(f"Trades: {stats['total_trades']:,}\n")
         
         # Market sentiment
         buy_ratio = stats['buy_ratio']
-        summary_lines.append("─── SENTIMENT ───")
+        summary_lines.append("\n─── SENTIMENT ───")
         summary_lines.append(f"Buy Ratio: {buy_ratio:.1f}%")
         if buy_ratio > 52:
             summary_lines.append("Signal: BULLISH ▲")
@@ -321,11 +321,10 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
             summary_lines.append("Signal: BEARISH ▼")
         else:
             summary_lines.append("Signal: NEUTRAL ─")
-        summary_lines.append("\n")
         
         # Technical indicators
         if 'rsi' in stats:
-            summary_lines.append("─── INDICATORS ───")
+            summary_lines.append("\n─── INDICATORS ───")
             rsi_val = stats['rsi']
             summary_lines.append(f"RSI(14): {rsi_val:.1f}")
             if rsi_val > 70:
@@ -342,21 +341,19 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
                 summary_lines.append("  BULLISH ▲")
             else:
                 summary_lines.append("  BEARISH ▼")
-            summary_lines.append("\n")
         
         # Market dynamics
         if 'volatility' in stats:
-            summary_lines.append("─── DYNAMICS ───")
+            summary_lines.append("\n─── DYNAMICS ───")
             summary_lines.append(f"Volatility: {stats['volatility']:.2f}%")
             summary_lines.append(f"ATR: {stats['atr_pct']:.2f}%")
             summary_lines.append(f"Momentum: {stats['momentum']:+.1f}%")
             vol_str = stats['volume_strength']
             summary_lines.append(f"Vol: {vol_str:+.0f}%")
-            summary_lines.append("\n")
         
         # Funding rate
         if 'funding_rate' in stats and stats['funding_rate'] is not None:
-            summary_lines.append("─── FUNDING ───")
+            summary_lines.append("\n─── FUNDING ───")
             fr = stats['funding_rate']
             summary_lines.append(f"Rate: {fr:.4f}%")
             summary_lines.append(f"Next: {stats['funding_next']}")
@@ -364,10 +361,10 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         summary_text = '\n'.join(summary_lines)
         
         # Add background box with text (smaller font for 640x480)
-        bbox_props = dict(boxstyle='round,pad=0.4', facecolor='#F8F8F8', edgecolor='#999999', linewidth=1.2)
+        bbox_props = dict(boxstyle='round,pad=0.0', facecolor='white',  linewidth=0.8)
         ax_summary.text(0.5, 0.5, summary_text, 
                        transform=ax_summary.transAxes,
-                       fontsize=6.5,
+                       fontsize=7.5,
                        verticalalignment='center',
                        horizontalalignment='center',
                        fontfamily='sans-serif',
@@ -383,12 +380,6 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         image_bytes = buf.read()
         plt.close()
         buf.close()
-        
-        # 估算信息
-        width = 1280  # 估算值
-        height = 960
-        file_size = len(image_bytes) / 1024  # KB
-        tokens = (width * height) / 1024
         logger.debug(f"Chart generated in memory: ~{file_size:.1f} KB, ~{tokens:.0f} tokens")
         return image_bytes
     else:
