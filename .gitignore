@@ -3,6 +3,7 @@
 *.txt
 *.swap
 *.so
+*.log
 .env
 
 # folders
