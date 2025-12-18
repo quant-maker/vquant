@@ -57,7 +57,7 @@ class Trader:
         if float(quantity) == 0:
             logger.info("Position already at target, no adjustment needed")
             return
-        if is_open and (volume * fprice < 5.2):
+        if is_open and abs(volume * fprice) < 5.2:
             logger.warning(f"Order value too small to open new position: {volume} * {fprice} < 5.2")
             return
         # Step 3: Place new order
