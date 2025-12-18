@@ -268,6 +268,8 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         if hasattr(ax, 'xaxis'):
             # Reduce number of x-axis ticks
             ax.xaxis.set_major_locator(plt.MaxNLocator(8))
+            # Remove x-axis margins to make bars touch edges
+            ax.margins(x=0)
     
     # Expand figure to make room for summary panel on the right
     if stats:
@@ -363,8 +365,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
                        fontfamily='monospace',
                        bbox=bbox_props,
                        linespacing=1.15)
-    
-    plt.savefig(save_path, dpi=100, bbox_inches='tight', pad_inches=0.1)
+    plt.savefig(save_path, dpi=100, bbox_inches='tight', pad_inches=0)
     plt.close()
     
     # 获取文件信息
@@ -379,8 +380,8 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
 if __name__ == '__main__':
     # Configuration
     SYMBOL = 'BTCUSDT'  # Trading pair
-    INTERVAL = '1h'      # Time interval: 1m, 5m, 15m, 1h, 4h, 1d
-    LIMIT = 100          # Number of data points to display
+    INTERVAL = '1h'     # Time interval: 1m, 5m, 15m, 1h, 4h, 1d
+    LIMIT = 72          # Number of data points to display
     MA_PERIODS = [7, 25, 99]  # Moving average periods
     
     # Create charts directory if not exists

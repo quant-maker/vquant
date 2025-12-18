@@ -50,19 +50,15 @@ class Trader:
         target = (args.volume * target) # here target is weighted position ratio and volume is max position size
         volume = target - curpos + self.init_pos
         quantity = round_it(abs(volume), lot_round_at(symbol))
-        
         if float(quantity) == 0:  # Set a tolerance value
             logger.info("Current position already at target, no adjustment needed")
             return
-        
         # Prepare order
         side = 'BUY' if volume > 0 else 'SELL'
         logger.info(f"Preparing order: {side} {quantity} {symbol} @ {price}")
-        
         order = dict(
             symbol=symbol, side=side, quantity=quantity,
             type='LIMIT', timeInForce='GTC', price=price)
-        
         try:
             logger.info(f"Send {order=}")
             result = self.cli.new_order(**order)

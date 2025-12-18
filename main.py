@@ -235,8 +235,8 @@ def parse_arguments():
         help='Trading account name (default: li)')
     # Technical parameters
     parser.add_argument(
-        '--limit', '-l', type=int, default=100,
-        help='Number of K-line data points (default: 100)')
+        '--limit', '-l', type=int, default=72,
+        help='Number of K-line data points (default: 72)')
     parser.add_argument(
         '--ma-periods', type=int, nargs='+', default=[7, 25, 99],
         help='Moving average periods (default: 7 25 99)')
