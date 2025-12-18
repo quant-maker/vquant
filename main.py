@@ -159,7 +159,7 @@ def run(args):
         save_path = None
     else:
         timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
-        save_path = f'charts/{args.symbol}_{args.interval}_{timestamp}.png'
+        save_path = f'charts/{args.name}_{timestamp}.png'
         plot_candlestick(
             df_display, symbol=args.symbol, save_path=save_path,
             ma_dict=ma_dict_display, stats=stats, return_bytes=False)
