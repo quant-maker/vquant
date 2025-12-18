@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class Trader:
     """Trade Executor - Execute trades based on AI analysis results"""
     
-    def __init__(self, init_pos, account: str = 'li', name: str = 'default'):
+    def __init__(self, name, account: str = 'li'):
         """
         Initialize trader
         Args:
@@ -27,7 +27,6 @@ class Trader:
         api_key, private_key = load_api_keys(account)
         self.cli = USDM(api_key=api_key, private_key=private_key)
         self.account = account
-        self.init_pos = init_pos
         self.name = name
         
         # Initialize position manager
@@ -51,7 +50,7 @@ class Trader:
         # Step 2: Calculate target volume
         # target = args.volume if target > args.threshold else -args.volume if target < -args.threshold else 0
         target_pos = (args.volume * target)  # target is weighted position ratio [-1, 1]
-        volume = target_pos - curpos + self.init_pos
+        volume = target_pos - curpos # volume to trade
         quantity = round_it(abs(volume), lot_round_at(symbol))
         if float(quantity) == 0:
             logger.info("Position already at target, no adjustment needed")
