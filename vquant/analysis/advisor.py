@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-#-*- coding:utf-8 -*-
+# -*- coding:utf-8 -*-
 
 
 import os
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class PositionAdvisor:
     """
     Position Advisor - Analyze K-line chart and provide position recommendations between -1 and 1
-    
+
     Position meaning:
     -1.0: Full short position
     -0.5: Half short position
@@ -26,8 +26,8 @@ class PositionAdvisor:
      0.5: Half long position
      1.0: Full long position
     """
-    
-    def __init__(self, service='copilot', api_key=None, base_url=None, model=None):
+
+    def __init__(self, service="copilot", api_key=None, base_url=None, model=None):
         """
         Initialize position advisor
         Args:
@@ -40,51 +40,53 @@ class PositionAdvisor:
         self.api_key = api_key or self._get_api_key()
         self.base_url = base_url or self._get_base_url()
         self.model = model or self._get_default_model()
-        
+
         if not self.api_key:
-            raise ValueError(f"API key not found. Please set it via parameter or environment variable.")
-    
+            raise ValueError(
+                f"API key not found. Please set it via parameter or environment variable."
+            )
+
     def _get_api_key(self) -> Optional[str]:
         """Get API key from environment variable"""
         env_vars = {
-            'copilot': 'GITHUB_TOKEN',
-            'openai': 'OPENAI_API_KEY',
-            'qwen': 'QWEN_API_KEY',  # Changed to QWEN_API_KEY to match .env
-            'deepseek': 'DEEPSEEK_API_KEY',
+            "copilot": "GITHUB_TOKEN",
+            "openai": "OPENAI_API_KEY",
+            "qwen": "QWEN_API_KEY",  # Changed to QWEN_API_KEY to match .env
+            "deepseek": "DEEPSEEK_API_KEY",
         }
         env_var = env_vars.get(self.service)
         return os.getenv(env_var) if env_var else None
-    
+
     def _get_base_url(self) -> str:
         """获取API基础URL"""
         urls = {
-            'copilot': 'https://api.githubcopilot.com',
-            'openai': 'https://api.openai.com/v1',
-            'qwen': 'https://dashscope.aliyuncs.com/api/v1',
-            'deepseek': 'https://api.deepseek.com/v1',
+            "copilot": "https://api.githubcopilot.com",
+            "openai": "https://api.openai.com/v1",
+            "qwen": "https://dashscope.aliyuncs.com/api/v1",
+            "deepseek": "https://api.deepseek.com/v1",
         }
-        return urls.get(self.service, 'https://api.openai.com/v1')
-    
+        return urls.get(self.service, "https://api.openai.com/v1")
+
     def _get_default_model(self) -> str:
         """Get default model"""
         models = {
-            'copilot': 'gpt-4o',  # Can also be 'claude-3.5-sonnet', 'o1-preview', etc.
-            'openai': 'gpt-4o',
-            'qwen': 'qwen-vl-max',  # Can also be 'qwen-vl-plus', 'qwen3-vl-plus', etc.
-            'deepseek': 'deepseek-chat',
+            "copilot": "gpt-4o",  # Can also be 'claude-3.5-sonnet', 'o1-preview', etc.
+            "openai": "gpt-4o",
+            "qwen": "qwen-vl-max",  # Can also be 'qwen-vl-plus', 'qwen3-vl-plus', etc.
+            "deepseek": "deepseek-chat",
         }
-        return models.get(self.service, 'gpt-4o')
-    
+        return models.get(self.service, "gpt-4o")
+
     def _encode_image(self, image_path: str = None, image_bytes: bytes = None) -> str:
         """Encode image to base64"""
         if image_bytes:
-            return base64.b64encode(image_bytes).decode('utf-8')
+            return base64.b64encode(image_bytes).decode("utf-8")
         elif image_path:
-            with open(image_path, 'rb') as f:
-                return base64.b64encode(f.read()).decode('utf-8')
+            with open(image_path, "rb") as f:
+                return base64.b64encode(f.read()).decode("utf-8")
         else:
             raise ValueError("Either image_path or image_bytes must be provided")
-    
+
     def _build_analysis_prompt(self) -> str:
         """Build analysis prompt"""
         return """You are a professional quantitative trading analyst. Please carefully analyze this cryptocurrency K-line chart, including:
@@ -122,322 +124,335 @@ Please return the result in JSON format as follows:
 }
 
 Return only JSON, no other content."""
-    
-    def _call_copilot_api(self, image_path: str = None, image_bytes: bytes = None) -> Dict[str, Any]:
+
+    def _call_copilot_api(
+        self, image_path: str = None, image_bytes: bytes = None
+    ) -> Dict[str, Any]:
         """Call GitHub Copilot API"""
         base64_image = self._encode_image(image_path, image_bytes)
         headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {self.api_key}',
-            'Editor-Version': 'vscode/1.95.0',
-            'Editor-Plugin-Version': 'copilot-chat/0.22.0',
-            'User-Agent': 'GitHubCopilotChat/0.22.0'
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+            "Editor-Version": "vscode/1.95.0",
+            "Editor-Plugin-Version": "copilot-chat/0.22.0",
+            "User-Agent": "GitHubCopilotChat/0.22.0",
         }
         payload = {
-            'model': self.model,
-            'messages': [
+            "model": self.model,
+            "messages": [
                 {
-                    'role': 'user',
-                    'content': [
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": self._build_analysis_prompt()},
                         {
-                            'type': 'text',
-                            'text': self._build_analysis_prompt()
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{base64_image}"
+                            },
                         },
-                        {
-                            'type': 'image_url',
-                            'image_url': {
-                                'url': f'data:image/png;base64,{base64_image}'
-                            }
-                        }
-                    ]
+                    ],
                 }
             ],
-            'max_tokens': 2000,
-            'temperature': 0.3,
-            'stream': False
+            "max_tokens": 2000,
+            "temperature": 0.3,
+            "stream": False,
         }
         response = requests.post(
-            f'{self.base_url}/chat/completions',
+            f"{self.base_url}/chat/completions",
             headers=headers,
             json=payload,
-            timeout=90
+            timeout=90,
         )
         response.raise_for_status()
-        
+
         result = response.json()
-        content = result['choices'][0]['message']['content']
-        
+        content = result["choices"][0]["message"]["content"]
+
         # 尝试解析JSON
         try:
             # 移除可能的markdown代码块标记
-            if '```json' in content:
-                content = content.split('```json')[1].split('```')[0].strip()
-            elif '```' in content:
-                content = content.split('```')[1].split('```')[0].strip()
-            
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+
             return json.loads(content)
         except json.JSONDecodeError:
             # If unable to parse JSON, return original content
             return {
-                'position': 0.0,
-                'confidence': 'unknown',
-                'reasoning': content,
-                'error': 'Failed to parse JSON response'
+                "position": 0.0,
+                "confidence": "unknown",
+                "reasoning": content,
+                "error": "Failed to parse JSON response",
             }
-    
-    def _call_openai_api(self, image_path: str = None, image_bytes: bytes = None) -> Dict[str, Any]:
+
+    def _call_openai_api(
+        self, image_path: str = None, image_bytes: bytes = None
+    ) -> Dict[str, Any]:
         """Call OpenAI GPT-4 Vision API"""
         base64_image = self._encode_image(image_path, image_bytes)
-        
+
         headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {self.api_key}'
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
         }
-        
+
         payload = {
-            'model': self.model,
-            'messages': [
+            "model": self.model,
+            "messages": [
                 {
-                    'role': 'user',
-                    'content': [
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": self._build_analysis_prompt()},
                         {
-                            'type': 'text',
-                            'text': self._build_analysis_prompt()
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{base64_image}"
+                            },
                         },
-                        {
-                            'type': 'image_url',
-                            'image_url': {
-                                'url': f'data:image/png;base64,{base64_image}'
-                            }
-                        }
-                    ]
+                    ],
                 }
             ],
-            'max_tokens': 1000,
-            'temperature': 0.3
+            "max_tokens": 1000,
+            "temperature": 0.3,
         }
-        
+
         response = requests.post(
-            f'{self.base_url}/chat/completions',
+            f"{self.base_url}/chat/completions",
             headers=headers,
             json=payload,
-            timeout=60
+            timeout=60,
         )
         response.raise_for_status()
-        
+
         result = response.json()
-        content = result['choices'][0]['message']['content']
-        
+        content = result["choices"][0]["message"]["content"]
+
         # 尝试解析JSON
         try:
             # 移除可能的markdown代码块标记
-            if '```json' in content:
-                content = content.split('```json')[1].split('```')[0].strip()
-            elif '```' in content:
-                content = content.split('```')[1].split('```')[0].strip()
-            
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+
             return json.loads(content)
         except json.JSONDecodeError:
             # If unable to parse JSON, return original content
             return {
-                'position': 0.0,
-                'confidence': 'unknown',
-                'reasoning': content,
-                'error': 'Failed to parse JSON response'
+                "position": 0.0,
+                "confidence": "unknown",
+                "reasoning": content,
+                "error": "Failed to parse JSON response",
             }
-    
-    def _call_qwen_api(self, image_path: str = None, image_bytes: bytes = None) -> Dict[str, Any]:
+
+    def _call_qwen_api(
+        self, image_path: str = None, image_bytes: bytes = None
+    ) -> Dict[str, Any]:
         """Call Qwen-VL API"""
         # Read and encode image
         if image_bytes:
             image_data = image_bytes
         elif image_path:
-            with open(image_path, 'rb') as f:
+            with open(image_path, "rb") as f:
                 image_data = f.read()
         else:
             raise ValueError("Either image_path or image_bytes must be provided")
-        base64_image = base64.b64encode(image_data).decode('utf-8')
-        
+        base64_image = base64.b64encode(image_data).decode("utf-8")
+
         headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {self.api_key}'
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
         }
-        
+
         payload = {
-            'model': self.model,
-            'input': {
-                'messages': [
+            "model": self.model,
+            "input": {
+                "messages": [
                     {
-                        'role': 'user',
-                        'content': [
-                            {
-                                'image': f'data:image/png;base64,{base64_image}'
-                            },
-                            {
-                                'text': self._build_analysis_prompt()
-                            }
-                        ]
+                        "role": "user",
+                        "content": [
+                            {"image": f"data:image/png;base64,{base64_image}"},
+                            {"text": self._build_analysis_prompt()},
+                        ],
                     }
                 ]
             },
-            'parameters': {
-                'result_format': 'message'
-            }
+            "parameters": {"result_format": "message"},
         }
-        
+
         response = requests.post(
-            f'{self.base_url}/services/aigc/multimodal-generation/generation',
+            f"{self.base_url}/services/aigc/multimodal-generation/generation",
             headers=headers,
             json=payload,
-            timeout=60
+            timeout=60,
         )
+        
+        if response.status_code != 200:
+            logger.error(f"Qwen API error response: {response.text}")
         response.raise_for_status()
-        
+
         result = response.json()
-        content = result['output']['choices'][0]['message']['content'][0]['text']
-        
+        content = result["output"]["choices"][0]["message"]["content"][0]["text"]
+
         # Try to parse JSON
         try:
-            if '```json' in content:
-                content = content.split('```json')[1].split('```')[0].strip()
-            elif '```' in content:
-                content = content.split('```')[1].split('```')[0].strip()
-            
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+
             return json.loads(content)
         except json.JSONDecodeError:
             return {
-                'position': 0.0,
-                'confidence': 'unknown',
-                'reasoning': content,
-                'error': 'Failed to parse JSON response'
+                "position": 0.0,
+                "confidence": "unknown",
+                "reasoning": content,
+                "error": "Failed to parse JSON response",
             }
-    
-    def _call_deepseek_api(self, image_path: str = None, image_bytes: bytes = None) -> Dict[str, Any]:
+
+    def _call_deepseek_api(
+        self, image_path: str = None, image_bytes: bytes = None
+    ) -> Dict[str, Any]:
         """Call DeepSeek API (if vision is supported)"""
         base64_image = self._encode_image(image_path, image_bytes)
-        
+
         headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {self.api_key}'
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
         }
-        
+
         payload = {
-            'model': self.model,
-            'messages': [
+            "model": self.model,
+            "messages": [
                 {
-                    'role': 'user',
-                    'content': [
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": self._build_analysis_prompt()},
                         {
-                            'type': 'text',
-                            'text': self._build_analysis_prompt()
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{base64_image}"
+                            },
                         },
-                        {
-                            'type': 'image_url',
-                            'image_url': {
-                                'url': f'data:image/png;base64,{base64_image}'
-                            }
-                        }
-                    ]
+                    ],
                 }
             ],
-            'max_tokens': 1000,
-            'temperature': 0.3
+            "max_tokens": 1000,
+            "temperature": 0.3,
         }
-        
+
         response = requests.post(
-            f'{self.base_url}/chat/completions',
+            f"{self.base_url}/chat/completions",
             headers=headers,
             json=payload,
-            timeout=60
+            timeout=60,
         )
         response.raise_for_status()
-        
+
         result = response.json()
-        content = result['choices'][0]['message']['content']
-        
+        content = result["choices"][0]["message"]["content"]
+
         try:
-            if '```json' in content:
-                content = content.split('```json')[1].split('```')[0].strip()
-            elif '```' in content:
-                content = content.split('```')[1].split('```')[0].strip()
-            
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+
             return json.loads(content)
         except json.JSONDecodeError:
             return {
-                'position': 0.0,
-                'confidence': 'unknown',
-                'reasoning': content,
-                'error': 'Failed to parse JSON response'
+                "position": 0.0,
+                "confidence": "unknown",
+                "reasoning": content,
+                "error": "Failed to parse JSON response",
             }
-    
-    def analyze(self, image_path: str = None, image_bytes: bytes = None, save_json: bool = True, symbol: str = None, current_price: float = None) -> Dict[str, Any]:
+
+    def analyze(
+        self,
+        image_path: str = None,
+        image_bytes: bytes = None,
+        symbol: str = None,
+        interval: str = None,
+        current_price: float = None,
+    ) -> Dict[str, Any]:
         """
         Analyze chart and provide position recommendation
-        
+
         Args:
             image_path: Chart image path (optional if image_bytes provided)
             image_bytes: Chart image bytes (optional if image_path provided)
-            save_json: Whether to save analysis result as JSON file
             symbol: Trading pair symbol (e.g., BTCUSDT)
+            interval: Time interval (e.g., 1h, 4h, 1d)
             current_price: Current market price
-            
+
         Returns:
             Dictionary containing position recommendation and analysis results
         """
         if image_path is None and image_bytes is None:
             raise ValueError("Either image_path or image_bytes must be provided")
         model_display = f"{self.service.upper()}"
-        if self.service == 'copilot':
+        if self.service == "copilot":
             model_display = f"GitHub Copilot ({self.model})"
-        
+
         source_info = "memory" if image_bytes else image_path
         logger.info(f"Analyzing chart with {model_display}: {source_info}")
-        
+
         # Call corresponding API
-        if self.service == 'copilot':
+        if self.service == "copilot":
             result = self._call_copilot_api(image_path, image_bytes)
-        elif self.service == 'openai':
+        elif self.service == "openai":
             result = self._call_openai_api(image_path, image_bytes)
-        elif self.service == 'qwen':
+        elif self.service == "qwen":
             result = self._call_qwen_api(image_path, image_bytes)
-        elif self.service == 'deepseek':
+        elif self.service == "deepseek":
             result = self._call_deepseek_api(image_path, image_bytes)
         else:
             raise ValueError(f"Unsupported service: {self.service}")
-        
+
         # Add metadata
-        result['timestamp'] = datetime.now().isoformat()
-        result['image_path'] = image_path if image_path else 'memory'
-        result['service'] = self.service
-        result['model'] = self.model
-        
+        result["timestamp"] = datetime.now().isoformat()
+        result["image_path"] = image_path if image_path else "memory"
+        result["service"] = self.service
+        result["model"] = self.model
+
         # Add trading information for Trader
         if symbol:
-            result['symbol'] = symbol
+            result["symbol"] = symbol
         if current_price is not None:
-            result['current_price'] = current_price
-        
+            result["current_price"] = current_price
+
         # Ensure position is between -1 and 1
-        if 'position' in result:
-            result['position'] = max(-1.0, min(1.0, result['position']))
-        
-        # Save as JSON (only if image_path is provided and save_json is True)
-        if save_json and image_path:
-            json_path = image_path.rsplit('.', 1)[0] + '.json'
-            with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(result, f, ensure_ascii=False, indent=2)
-            logger.info(f"Analysis result saved to: {json_path}")
-            logger.debug(f"Analysis result: position={result.get('position')}, confidence={result.get('confidence')}")
-        
+        if "position" in result:
+            result["position"] = max(-1.0, min(1.0, result["position"]))
+
+        # Save as JSON
+        if image_path:
+            json_path = image_path.rsplit(".", 1)[0] + ".json"
+        else:
+            # 如果没有图片路径（quiet模式），使用和图片相同的命名规则
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            symbol_str = symbol if symbol else "unknown"
+            interval_str = interval if interval else "unknown"
+            json_path = f"charts/{symbol_str}_{interval_str}_{timestamp}.json"
+            os.makedirs("charts", exist_ok=True)
+
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+        logger.info(f"Analysis result saved to: {json_path}")
+        logger.debug(
+            f"Analysis result: position={result.get('position')}, confidence={result.get('confidence')}"
+        )
+
         return result
-    
+
 
 def main():
     """
     命令行使用示例
     """
     import sys
-    
+
     if len(sys.argv) < 2:
         print("Usage: python position_advisor.py <image_path> [service] [model]")
         print("Services: copilot (default), openai, qwen, deepseek")
@@ -446,14 +461,14 @@ def main():
         print("  Qwen: qwen-vl-max, qwen-vl-plus, qwen3-vl-plus")
         sys.exit(1)
     image_path = sys.argv[1]
-    service = sys.argv[2] if len(sys.argv) > 2 else 'copilot'
+    service = sys.argv[2] if len(sys.argv) > 2 else "copilot"
     model = sys.argv[3] if len(sys.argv) > 3 else None
     # 创建分析器
     advisor = PositionAdvisor(service=service, model=model)
-    
+
     # 分析图表
-    _ = advisor.analyze(image_path, save_json=True)
+    _ = advisor.analyze(image_path)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
