@@ -217,7 +217,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
     add_plots.append(mpf.make_addplot(histogram, panel=3, type='bar', color=colors, alpha=0.5))
     
     # Plot using mplfinance with indicators
-    # figsize=(6.4, 4.8) @ DPI=100 = 640x480像素 = ~300 tokens
+    # figsize=(8, 6) @ DPI=100 with bbox_inches='tight' = ~640x480像素 = ~300 tokens
     fig, axes = mpf.plot(
         df[['Open', 'High', 'Low', 'Close', 'Volume']],
         type='candle',
@@ -227,7 +227,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         volume=True,
         ylabel_lower='Volume',
         addplot=add_plots if add_plots else None,
-        figsize=(6.4, 4.8),
+        figsize=(8, 6),
         returnfig=True,
         panel_ratios=(3, 1, 0.8, 0.8),
         datetime_format='%H:%M',
@@ -281,9 +281,9 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
     
     # Expand figure to make room for summary panel on the right
     if stats:
-        # 640x480像素
-        # 6.4x4.8 @ DPI=100 = 640x480像素 = ~300 tokens
-        fig.set_size_inches(6.4, 4.8)
+        # 640x480像素 (使用8x6以补偿bbox_inches='tight'的裁剪)
+        # 8x6 @ DPI=100 with tight = ~640x480像素 = ~300 tokens
+        fig.set_size_inches(8, 6)
         
         # Adjust existing axes to make room on the right (maximize chart space)
         for ax in fig.get_axes():
@@ -297,7 +297,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         
         # Build summary text with technical indicators
         summary_lines = []
-        summary_lines.append(f"=== {symbol} ===")
+        summary_lines.append(f"\n=== {symbol} ===")
         
         # Price info
         summary_lines.append(f"Price: ${stats['current_price']:,.2f}")
@@ -356,7 +356,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
             summary_lines.append("\n─── FUNDING ───")
             fr = stats['funding_rate']
             summary_lines.append(f"Rate: {fr:.4f}%")
-            summary_lines.append(f"Next: {stats['funding_next']}")
+            summary_lines.append(f"Next: {stats['funding_next']}\n")
         
         summary_text = '\n'.join(summary_lines)
         
@@ -364,7 +364,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         bbox_props = dict(boxstyle='round,pad=0.0', facecolor='white',  linewidth=0.8)
         ax_summary.text(0.5, 0.5, summary_text, 
                        transform=ax_summary.transAxes,
-                       fontsize=7.5,
+                       fontsize=9.5,
                        verticalalignment='center',
                        horizontalalignment='center',
                        fontfamily='sans-serif',
