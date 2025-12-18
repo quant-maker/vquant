@@ -83,7 +83,7 @@ def run(args):
     funding_info = fetch_funding_rate(symbol=args.symbol)
     funding_times, funding_rates = fetch_funding_rate_history(symbol=args.symbol, limit=30)
     if funding_info:
-        logger.info(f"Current funding rate: {funding_info['rate']:+.4f}%")
+        logger.info(f"Current funding rate: {funding_info['rate']:.4f}%")
     
     # 3. Calculate indicators and generate chart
     logger.info("Step 3/4: Calculating technical indicators and generating chart...")

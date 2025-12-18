@@ -287,6 +287,9 @@ Return only JSON, no other content."""
             json=payload,
             timeout=60,
         )
+        
+        if response.status_code != 200:
+            logger.error(f"Qwen API error response: {response.text}")
         response.raise_for_status()
 
         result = response.json()

@@ -358,7 +358,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         if 'funding_rate' in stats and stats['funding_rate'] is not None:
             summary_lines.append("─── FUNDING ───")
             fr = stats['funding_rate']
-            summary_lines.append(f"Rate: {fr:+.4f}%")
+            summary_lines.append(f"Rate: {fr:.4f}%")
             summary_lines.append(f"Next: {stats['funding_next']}")
         
         summary_text = '\n'.join(summary_lines)
@@ -370,7 +370,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
                        fontsize=6.5,
                        verticalalignment='center',
                        horizontalalignment='center',
-                       fontfamily='monospace',
+                       fontfamily='sans-serif',
                        bbox=bbox_props,
                        linespacing=1.15)
     
@@ -529,7 +529,7 @@ if __name__ == '__main__':
         logger.info(f"Buy ratio: {buy_ratio:.1f}%")
         
         if funding_info:
-            logger.info(f"Funding rate: {funding_info['rate']:+.4f}% (Next: {funding_info['next_time']})")
+            logger.info(f"Funding rate: {funding_info['rate']:.4f}% (Next: {funding_info['next_time']})")
             logger.info(f"Mark price: {funding_info['mark_price']:.2f}")
         
         # Generate filename with timestamp
