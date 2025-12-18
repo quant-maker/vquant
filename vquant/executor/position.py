@@ -26,10 +26,6 @@ class PositionManager:
         self.state_dir = 'positions'
         os.makedirs(self.state_dir, exist_ok=True)
         self.state_file = os.path.join(self.state_dir, f'{name}_pos.json')
-        # Check for duplicate strategy instances
-        if os.path.exists(self.state_file):
-            logger.error("Please use a different strategy name (--name) or stop the existing instance.")
-            raise RuntimeError(f"Strategy '{name}' is already running. Use a different name.")
         logger.debug(f"PositionManager initialized for strategy '{name}'")
     
     def get_current_position(self) -> float:
