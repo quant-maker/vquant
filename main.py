@@ -238,7 +238,7 @@ def parse_arguments():
         '--account', '-a', type=str, default='li',
         help='Trading account name (default: li)')
     parser.add_argument(
-        '--name', type=str, default='default',
+        '--name', type=str, required=True,
         help='Strategy name (must be unique, prevents duplicate instances) (default: default)')
     # Technical parameters
     parser.add_argument(
