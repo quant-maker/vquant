@@ -172,7 +172,7 @@ def run(args):
             try:
                 from vquant.executor.trader import Trader
                 trader = Trader(args.init_pos)
-                trader.trade(result, args.volume)
+                trader.trade(result, args)
                 logger.info("Trade execution completed")
             except ImportError as import_error:
                 logger.error(f"Failed to import trading module: {import_error}")
@@ -227,6 +227,9 @@ def parse_arguments():
     parser.add_argument(
         '--volume', type=float, default=0.002, # 0.002 BTC
         help='init pos thant not belongs to this strategy (default: 0.0)')
+    parser.add_argument(
+        '--threshold', type=float, default=0.5, # (0,1)
+        help='using with volume, > threshold then xxx < -theshold then xxx (default: 0.5)')
     parser.add_argument(
         '--account', '-a', type=str, default='li',
         help='Trading account name (default: li)')

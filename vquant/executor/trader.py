@@ -27,7 +27,7 @@ class Trader:
         self.account = account
         self.init_pos = init_pos
 
-    def trade(self, advisor, volume):
+    def trade(self, advisor, args):
         """
         Execute trade
         Args:
@@ -42,11 +42,11 @@ class Trader:
         
         # Get current position
         posinfo = self.cli.position(symbol=symbol)
-        curpos = float(posinfo[0]['positionAmt'])
+        curpos = float(posinfo[0]['positionAmt']) if posinfo else 0
         logger.info(f"Current position: {curpos}")
         
         # Calculate adjustment volume
-        target = volume if target > 0.5 else -volume if target < -0.5 else 0
+        target = args.volume if target > args.threshold else -args.volume if target < -args.threshold else 0
         volume = target - curpos + self.init_pos
         
         if abs(volume) < 0.001:  # Set a tolerance value
