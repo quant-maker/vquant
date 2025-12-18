@@ -46,16 +46,20 @@ class Trader:
         logger.info(f"Current position: {curpos}")
         
         # Calculate adjustment volume
+<<<<<<< HEAD
         target = args.volume if target > args.threshold else -args.volume if target < -args.threshold else 0
+=======
+        target = volume * target # here target is a ratio, volume is user defined max volume
+>>>>>>> fb8d75f (fix the quantity)
         volume = target - curpos + self.init_pos
+        quantity = round_it(abs(volume), lot_round_at(symbol))
         
-        if abs(volume) < 0.001:  # Set a tolerance value
+        if float(quantity) == 0:  # Set a tolerance value
             logger.info("Current position already at target, no adjustment needed")
             return
         
         # Prepare order
         side = 'BUY' if volume > 0 else 'SELL'
-        quantity = round_it(abs(volume), lot_round_at(symbol))
         logger.info(f"Preparing order: {side} {quantity} {symbol} @ {price}")
         
         order = dict(
