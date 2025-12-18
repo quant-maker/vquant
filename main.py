@@ -107,12 +107,17 @@ def run(args):
     total_trades = df_display['Trades'].sum()
     total_taker_buy = df_display['TakerBuyBase'].sum()
     buy_ratio = (total_taker_buy / total_volume * 100) if total_volume > 0 else 0
-    # 技术指标
+    # 技术指标 - 在完整数据上计算，然后截断用于显示
     rsi_full = calculate_rsi(df['Close'])
-    macd_full, signal_full, _ = calculate_macd(df['Close'])
+    macd_full, signal_full, histogram_full = calculate_macd(df['Close'])
     current_rsi = rsi_full.iloc[-1]
     current_macd = macd_full.iloc[-1]
     current_signal = signal_full.iloc[-1]
+    # 截断指标数据用于绘图
+    rsi_display = rsi_full.iloc[-args.limit:]
+    macd_display = macd_full.iloc[-args.limit:]
+    signal_display = signal_full.iloc[-args.limit:]
+    histogram_display = histogram_full.iloc[-args.limit:]
     # 市场动态指标
     volatility = df_display['Close'].pct_change().std() * 100
     recent_avg = df_display.iloc[-10:]['Close'].mean()
@@ -144,7 +149,12 @@ def run(args):
         'momentum': momentum,
         'volume_strength': volume_strength,
         'atr': atr,
-        'atr_pct': atr_pct
+        'atr_pct': atr_pct,
+        # 添加完整的指标序列用于绘图
+        'rsi_series': rsi_display,
+        'macd_series': macd_display,
+        'signal_series': signal_display,
+        'histogram_series': histogram_display
     }
     if funding_info:
         stats['funding_rate'] = funding_info['rate']

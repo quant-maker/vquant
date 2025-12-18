@@ -193,9 +193,16 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
     else:
         title_ma = ''
     
-    # Calculate RSI and MACD
-    rsi = calculate_rsi(df['Close'])
-    macd, signal_line, histogram = calculate_macd(df['Close'])
+    # Calculate RSI and MACD - 优先使用传入的指标数据（已在完整数据上计算）
+    if stats and 'rsi_series' in stats:
+        rsi = stats['rsi_series']
+        macd = stats['macd_series']
+        signal_line = stats['signal_series']
+        histogram = stats['histogram_series']
+    else:
+        # 如果没有传入，则在当前数据上计算（可能不够准确）
+        rsi = calculate_rsi(df['Close'])
+        macd, signal_line, histogram = calculate_macd(df['Close'])
     
     # Add RSI to additional plots
     add_plots.append(mpf.make_addplot(rsi, panel=2, color='purple', ylabel='RSI', secondary_y=False, width=0.6))
@@ -424,12 +431,17 @@ if __name__ == '__main__':
         total_taker_buy = df_display['TakerBuyBase'].sum()
         buy_ratio = (total_taker_buy / total_volume * 100) if total_volume > 0 else 0
         
-        # Calculate technical indicators for summary
+        # Calculate technical indicators for summary - 在完整数据上计算，然后截断
         rsi_full = calculate_rsi(df['Close'])
-        macd_full, signal_full, _ = calculate_macd(df['Close'])
+        macd_full, signal_full, histogram_full = calculate_macd(df['Close'])
         current_rsi = rsi_full.iloc[-1]
         current_macd = macd_full.iloc[-1]
         current_signal = signal_full.iloc[-1]
+        # 截断指标数据用于绘图
+        rsi_display = rsi_full.iloc[-LIMIT:]
+        macd_display = macd_full.iloc[-LIMIT:]
+        signal_display = signal_full.iloc[-LIMIT:]
+        histogram_display = histogram_full.iloc[-LIMIT:]
         
         # 计算波动率（标准差）- 市场风险指标
         volatility = df_display['Close'].pct_change().std() * 100
@@ -468,7 +480,12 @@ if __name__ == '__main__':
             'momentum': momentum,
             'volume_strength': volume_strength,
             'atr': atr,
-            'atr_pct': atr_pct
+            'atr_pct': atr_pct,
+            # 添加完整的指标序列用于绘图
+            'rsi_series': rsi_display,
+            'macd_series': macd_display,
+            'signal_series': signal_display,
+            'histogram_series': histogram_display
         }
         
         # Add funding rate info to stats
