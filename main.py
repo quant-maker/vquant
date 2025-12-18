@@ -83,7 +83,7 @@ def run(args):
     funding_info = fetch_funding_rate(symbol=args.symbol)
     funding_times, funding_rates = fetch_funding_rate_history(symbol=args.symbol, limit=30)
     if funding_info:
-        logger.info(f"Current funding rate: {funding_info['rate']:+.4f}%")
+        logger.info(f"Current funding rate: {funding_info['rate']:.4f}%")
     
     # 3. Calculate indicators and generate chart
     logger.info("Step 3/4: Calculating technical indicators and generating chart...")
@@ -180,13 +180,13 @@ def run(args):
     # 4. AI analysis
     logger.info(f"Step 4/4: Performing AI analysis with {model_display}...")
     try:
-        advisor = PositionAdvisor(service=args.service, model=args.model)
-        result = advisor.analyze(
-            image_path=save_path, 
-            image_bytes=image_bytes, 
-            save_json=not args.quiet,  # quiet模式下不保存json
-            symbol=args.symbol, 
-            current_price=current_price)
+        # advisor = PositionAdvisor(service=args.service, model=args.model)
+        # result = advisor.analyze(
+        #     image_path=save_path, 
+        #     image_bytes=image_bytes, 
+        #     symbol=args.symbol, 
+        #     interval=args.interval, 
+        #     current_price=current_price)
         
         # Execute trade if enabled
         if args.trade and result:
