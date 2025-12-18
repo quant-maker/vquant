@@ -2,12 +2,13 @@
 #-*- coding:utf-8 -*-
 
 
+import time
 import logging
+
 from binance.fut.usdm import USDM
 from binance.auth.utils import load_api_keys
-from strategy.common.utils import round_at, lot_round_at
-from strategy.common.utils import cancel_all, round_it
 from vquant.executor.position import PositionManager
+from strategy.common.utils import round_at, lot_round_at, round_it
 
 
 logger = logging.getLogger(__name__)
@@ -62,9 +63,15 @@ class Trader:
             return
         # Step 3: Place new order
         side = 'BUY' if volume > 0 else 'SELL'
+        
+        # Generate client order ID with strategy name
+        timestamp_ms = int(time.time() * 1000)
+        client_order_id = f"{self.name}-{timestamp_ms}"
+        
         order = dict(
             symbol=symbol, side=side, quantity=quantity,
-            type='LIMIT', timeInForce='GTC', price=price)
+            type='LIMIT', timeInForce='GTC', price=price,
+            newClientOrderId=client_order_id)
         if not is_open:
             order['reduceOnly'] = True
         try:
