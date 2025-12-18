@@ -155,7 +155,7 @@ class PositionManager:
             Order state dict or None if not exists
         """
         if not os.path.exists(self.state_file):
-            return None
+            self._mark_order_processed({}, 0)  # Ensure file exists
         try:
             with open(self.state_file, 'r') as f:
                 state = json.load(f)
@@ -177,40 +177,10 @@ class PositionManager:
         state['processed'] = True
         try:
             with open(self.state_file, 'w') as f:
-                json.dump(state, f, indent=2)
+                json.dump(state, f, indent=4)
             logger.debug(f"Marked order as processed: {state}")
         except Exception as e:
             logger.exception(f"Failed to mark order as processed: {e}")
-    
-    def _save_position_only(self, symbol: str, position: float):
-        """
-        Save only position state (no pending order)
-        Used for initial position setup
-        Args:
-            symbol: Trading symbol
-            position: Current position
-        """
-        state = {
-            'symbol': symbol,
-            'position': position
-        }
-        try:
-            with open(self.state_file, 'w') as f:
-                json.dump(state, f, indent=2)
-            logger.debug(f"Saved position state: {state}")
-        except Exception as e:
-            logger.exception(f"Failed to save position state: {e}")
-    
-    def handle_previous_order(self) -> tuple:
-        """
-        Deprecated: This method is now integrated into get_current_position()
-        Kept for backward compatibility, just returns success
-        
-        Returns:
-            tuple: (should_continue: bool, adjustment: float)
-        """
-        logger.debug("handle_previous_order called but order handling is now in get_current_position")
-        return True, 0
     
     def save_new_order(self, symbol: str, order_id: int, side: str, quantity: float, position: float):
         """
