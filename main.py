@@ -166,7 +166,7 @@ def run(args):
         logger.info(f"Chart saved: {save_path}")
         image_bytes = None
     # 4. AI analysis
-    logger.info(f"Step 4/4: Performing AI analysis with {args.model}...")
+    logger.info(f"Step 4/4: Performing AI analysis with {args.service}::{args.model}...")
     try:
         advisor = PositionAdvisor(service=args.service, model=args.model)
         result = advisor.analyze(
