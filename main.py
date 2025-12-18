@@ -56,12 +56,6 @@ def setup_logging(args):
 
 def run(args):
     # main logical
-    model_display = f"{args.service.upper()}"
-    if args.service == 'copilot' and args.model:
-        model_display = f"GitHub Copilot ({args.model})"
-    logger.info(f"AI Service: {model_display}")
-    if args.trade:
-        logger.warning("Trading execution mode enabled")
     # Create charts directory
     os.makedirs('charts', exist_ok=True)
     # 1. Fetch K-line data
@@ -172,7 +166,7 @@ def run(args):
         logger.info(f"Chart saved: {save_path}")
         image_bytes = None
     # 4. AI analysis
-    logger.info(f"Step 4/4: Performing AI analysis with {model_display}...")
+    logger.info(f"Step 4/4: Performing AI analysis with {args.model}...")
     try:
         advisor = PositionAdvisor(service=args.service, model=args.model)
         result = advisor.analyze(
