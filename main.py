@@ -161,27 +161,39 @@ def run(args):
         stats['funding_next'] = funding_info['next_time']
     if funding_times and funding_rates:
         stats['funding_history'] = (funding_times, funding_rates)
-    # 生成图表文件名
-    timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
-    save_path = f'charts/{args.symbol}_{args.interval}_{timestamp}.png'
-    # Plot candlestick chart
-    plot_candlestick(
-        df_display, symbol=args.symbol, save_path=save_path, 
-        ma_dict=ma_dict_display, stats=stats)
-    logger.info(f"Chart saved: {save_path}")
+    # 生成图表 - quiet模式下使用内存，否则保存文件
+    if args.quiet:
+        logger.info("Quiet mode: generating chart in memory (no file I/O)")
+        image_bytes = plot_candlestick(
+            df_display, symbol=args.symbol, save_path=None,
+            ma_dict=ma_dict_display, stats=stats, return_bytes=True)
+        save_path = None
+    else:
+        timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
+        save_path = f'charts/{args.symbol}_{args.interval}_{timestamp}.png'
+        plot_candlestick(
+            df_display, symbol=args.symbol, save_path=save_path,
+            ma_dict=ma_dict_display, stats=stats, return_bytes=False)
+        logger.info(f"Chart saved: {save_path}")
+        image_bytes = None
     
     # 4. AI analysis
     logger.info(f"Step 4/4: Performing AI analysis with {model_display}...")
     try:
         advisor = PositionAdvisor(service=args.service, model=args.model)
-        result = advisor.analyze(save_path, save_json=True, symbol=args.symbol, current_price=current_price)
+        result = advisor.analyze(
+            image_path=save_path, 
+            image_bytes=image_bytes, 
+            save_json=not args.quiet,  # quiet模式下不保存json
+            symbol=args.symbol, 
+            current_price=current_price)
         
         # Execute trade if enabled
         if args.trade and result:
             logger.info("Executing trade...")
             try:
                 from vquant.executor.trader import Trader
-                trader = Trader(args.init_pos)
+                trader = Trader(args.init_pos, account=args.account)
                 trader.trade(result, args)
                 logger.info("Trade execution completed")
             except ImportError as import_error:
@@ -191,7 +203,7 @@ def run(args):
                 logger.error(f"Trade execution failed: {trade_error}", exc_info=True)
         
         return {
-            'chart_path': save_path,
+            'chart_path': save_path or 'memory',
             'stats': stats,
             'analysis': result
         }

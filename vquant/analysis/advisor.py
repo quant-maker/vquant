@@ -70,15 +70,20 @@ class PositionAdvisor:
         models = {
             'copilot': 'gpt-4o',  # Can also be 'claude-3.5-sonnet', 'o1-preview', etc.
             'openai': 'gpt-4o',
-            'qwen': 'qwen-vl-max',
+            'qwen': 'qwen-vl-max',  # Can also be 'qwen-vl-plus', 'qwen3-vl-plus', etc.
             'deepseek': 'deepseek-chat',
         }
         return models.get(self.service, 'gpt-4o')
     
-    def _encode_image(self, image_path: str) -> str:
+    def _encode_image(self, image_path: str = None, image_bytes: bytes = None) -> str:
         """Encode image to base64"""
-        with open(image_path, 'rb') as f:
-            return base64.b64encode(f.read()).decode('utf-8')
+        if image_bytes:
+            return base64.b64encode(image_bytes).decode('utf-8')
+        elif image_path:
+            with open(image_path, 'rb') as f:
+                return base64.b64encode(f.read()).decode('utf-8')
+        else:
+            raise ValueError("Either image_path or image_bytes must be provided")
     
     def _build_analysis_prompt(self) -> str:
         """Build analysis prompt"""
@@ -118,9 +123,9 @@ Please return the result in JSON format as follows:
 
 Return only JSON, no other content."""
     
-    def _call_copilot_api(self, image_path: str) -> Dict[str, Any]:
+    def _call_copilot_api(self, image_path: str = None, image_bytes: bytes = None) -> Dict[str, Any]:
         """Call GitHub Copilot API"""
-        base64_image = self._encode_image(image_path)
+        base64_image = self._encode_image(image_path, image_bytes)
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {self.api_key}',
@@ -180,9 +185,9 @@ Return only JSON, no other content."""
                 'error': 'Failed to parse JSON response'
             }
     
-    def _call_openai_api(self, image_path: str) -> Dict[str, Any]:
+    def _call_openai_api(self, image_path: str = None, image_bytes: bytes = None) -> Dict[str, Any]:
         """Call OpenAI GPT-4 Vision API"""
-        base64_image = self._encode_image(image_path)
+        base64_image = self._encode_image(image_path, image_bytes)
         
         headers = {
             'Content-Type': 'application/json',
@@ -241,11 +246,16 @@ Return only JSON, no other content."""
                 'error': 'Failed to parse JSON response'
             }
     
-    def _call_qwen_api(self, image_path: str) -> Dict[str, Any]:
+    def _call_qwen_api(self, image_path: str = None, image_bytes: bytes = None) -> Dict[str, Any]:
         """Call Qwen-VL API"""
         # Read and encode image
-        with open(image_path, 'rb') as f:
-            image_data = f.read()
+        if image_bytes:
+            image_data = image_bytes
+        elif image_path:
+            with open(image_path, 'rb') as f:
+                image_data = f.read()
+        else:
+            raise ValueError("Either image_path or image_bytes must be provided")
         base64_image = base64.b64encode(image_data).decode('utf-8')
         
         headers = {
@@ -254,7 +264,7 @@ Return only JSON, no other content."""
         }
         
         payload = {
-            'model': 'qwen-vl-max',
+            'model': self.model,
             'input': {
                 'messages': [
                     {
@@ -302,9 +312,9 @@ Return only JSON, no other content."""
                 'error': 'Failed to parse JSON response'
             }
     
-    def _call_deepseek_api(self, image_path: str) -> Dict[str, Any]:
+    def _call_deepseek_api(self, image_path: str = None, image_bytes: bytes = None) -> Dict[str, Any]:
         """Call DeepSeek API (if vision is supported)"""
-        base64_image = self._encode_image(image_path)
+        base64_image = self._encode_image(image_path, image_bytes)
         
         headers = {
             'Content-Type': 'application/json',
@@ -360,12 +370,13 @@ Return only JSON, no other content."""
                 'error': 'Failed to parse JSON response'
             }
     
-    def analyze(self, image_path: str, save_json: bool = True, symbol: str = None, current_price: float = None) -> Dict[str, Any]:
+    def analyze(self, image_path: str = None, image_bytes: bytes = None, save_json: bool = True, symbol: str = None, current_price: float = None) -> Dict[str, Any]:
         """
         Analyze chart and provide position recommendation
         
         Args:
-            image_path: Chart image path
+            image_path: Chart image path (optional if image_bytes provided)
+            image_bytes: Chart image bytes (optional if image_path provided)
             save_json: Whether to save analysis result as JSON file
             symbol: Trading pair symbol (e.g., BTCUSDT)
             current_price: Current market price
@@ -373,41 +384,51 @@ Return only JSON, no other content."""
         Returns:
             Dictionary containing position recommendation and analysis results
         """
+        if image_path is None and image_bytes is None:
+            raise ValueError("Either image_path or image_bytes must be provided")
         model_display = f"{self.service.upper()}"
         if self.service == 'copilot':
             model_display = f"GitHub Copilot ({self.model})"
-        logger.info(f"Analyzing chart with {model_display}: {image_path}")
+        
+        source_info = "memory" if image_bytes else image_path
+        logger.info(f"Analyzing chart with {model_display}: {source_info}")
+        
         # Call corresponding API
         if self.service == 'copilot':
-            result = self._call_copilot_api(image_path)
+            result = self._call_copilot_api(image_path, image_bytes)
         elif self.service == 'openai':
-            result = self._call_openai_api(image_path)
+            result = self._call_openai_api(image_path, image_bytes)
         elif self.service == 'qwen':
-            result = self._call_qwen_api(image_path)
+            result = self._call_qwen_api(image_path, image_bytes)
         elif self.service == 'deepseek':
-            result = self._call_deepseek_api(image_path)
+            result = self._call_deepseek_api(image_path, image_bytes)
         else:
             raise ValueError(f"Unsupported service: {self.service}")
+        
         # Add metadata
         result['timestamp'] = datetime.now().isoformat()
-        result['image_path'] = image_path
+        result['image_path'] = image_path if image_path else 'memory'
         result['service'] = self.service
         result['model'] = self.model
+        
         # Add trading information for Trader
         if symbol:
             result['symbol'] = symbol
         if current_price is not None:
             result['current_price'] = current_price
+        
         # Ensure position is between -1 and 1
         if 'position' in result:
             result['position'] = max(-1.0, min(1.0, result['position']))
-        # Save as JSON
-        if save_json:
+        
+        # Save as JSON (only if image_path is provided and save_json is True)
+        if save_json and image_path:
             json_path = image_path.rsplit('.', 1)[0] + '.json'
             with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(result, f, ensure_ascii=False, indent=2)
             logger.info(f"Analysis result saved to: {json_path}")
             logger.debug(f"Analysis result: position={result.get('position')}, confidence={result.get('confidence')}")
+        
         return result
     
 
@@ -420,7 +441,9 @@ def main():
     if len(sys.argv) < 2:
         print("Usage: python position_advisor.py <image_path> [service] [model]")
         print("Services: copilot (default), openai, qwen, deepseek")
-        print("Models (for copilot): gpt-4o, claude-3.5-sonnet, o1-preview, o1-mini")
+        print("Models:")
+        print("  Copilot: gpt-4o, claude-3.5-sonnet, o1-preview, o1-mini")
+        print("  Qwen: qwen-vl-max, qwen-vl-plus, qwen3-vl-plus")
         sys.exit(1)
     image_path = sys.argv[1]
     service = sys.argv[2] if len(sys.argv) > 2 else 'copilot'
