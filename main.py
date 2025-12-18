@@ -45,7 +45,7 @@ def setup_logging(args):
     log_format = '%(asctime)s %(levelname)s [%(filename)s:%(lineno)d]: %(message)s'
     date_format = '%Y-%m-%d %H:%M:%S'
     if args.log_file == "auto":
-        args.log_file = f"logs/{args.symbol}_{args.interval}.log"
+        args.log_file = f"logs/{args.name}.log"
     if args.log_file:
         os.makedirs(os.path.dirname(args.log_file) or '.', exist_ok=True)
         handlers = [logging.FileHandler(args.log_file, encoding='utf-8')]
