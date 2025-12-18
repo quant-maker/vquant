@@ -16,22 +16,22 @@ logger = logging.getLogger(__name__)
 class Trader:
     """Trade Executor - Execute trades based on AI analysis results"""
     
-    def __init__(self, init_pos, account: str = 'li', strategy_id: str = 'default'):
+    def __init__(self, init_pos, account: str = 'li', name: str = 'default'):
         """
         Initialize trader
         Args:
             account: Trading account name
-            strategy_id: Strategy identifier to distinguish positions from different strategies
+            name: Strategy name (unique identifier)
         """
-        logger.debug(f"Initializing trader, account: {account}, strategy_id: {strategy_id}")
+        logger.debug(f"Initializing trader, account: {account}, name: {name}")
         api_key, private_key = load_api_keys(account)
         self.cli = USDM(api_key=api_key, private_key=private_key)
         self.account = account
         self.init_pos = init_pos
-        self.strategy_id = strategy_id
+        self.name = name
         
         # Initialize position manager
-        self.pm = PositionManager(self.cli, strategy_id)
+        self.pm = PositionManager(self.cli, name)
 
     def trade(self, advisor, args):
         """
@@ -46,9 +46,8 @@ class Trader:
         symbol = advisor['symbol']
         target = advisor['position']
         price = round_it(advisor['current_price'], round_at(symbol))
-        
         # Step 1: Get current position (will check and handle previous order automatically)
-        curpos = self.pm.get_current_position(symbol)
+        curpos = self.pm.get_current_position()
         # Step 2: Calculate target volume
         # target = args.volume if target > args.threshold else -args.volume if target < -args.threshold else 0
         target_pos = (args.volume * target)  # target is weighted position ratio [-1, 1]
