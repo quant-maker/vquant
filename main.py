@@ -184,8 +184,8 @@ def run(args):
         result = advisor.analyze(
             image_path=save_path, 
             image_bytes=image_bytes, 
-            save_json=not args.quiet,  # quiet模式下不保存json
             symbol=args.symbol, 
+            interval=args.interval, 
             current_price=current_price)
         
         # Execute trade if enabled

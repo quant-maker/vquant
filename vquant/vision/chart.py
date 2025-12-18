@@ -239,7 +239,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         ma_periods = sorted(ma_dict.keys())
         
         # 比较左侧K线的最高点和最低点位置，选择空间更大的一侧
-        left_section = df.iloc[:len(df)//3]
+        left_section = df.iloc[:len(df)//8]
         high_avg = left_section['High'].mean()
         low_avg = left_section['Low'].min()
         mid_price = (df['High'].max() + df['Low'].min()) / 2
