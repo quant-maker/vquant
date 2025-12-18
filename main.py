@@ -60,13 +60,10 @@ def run(args):
     if args.service == 'copilot' and args.model:
         model_display = f"GitHub Copilot ({args.model})"
     logger.info(f"AI Service: {model_display}")
-    
     if args.trade:
         logger.warning("Trading execution mode enabled")
-    
     # Create charts directory
     os.makedirs('charts', exist_ok=True)
-    
     # 1. Fetch K-line data
     logger.info("Step 1/4: Fetching K-line data...")
     extra_data = max(args.ma_periods) - 1
@@ -77,14 +74,12 @@ def run(args):
         logger.error("Failed to fetch data")
         return None
     logger.info(f"Successfully fetched {len(df)} data points")
-    
     # 2. Fetch funding rate
     logger.info("Step 2/4: Fetching funding rate...")
     funding_info = fetch_funding_rate(symbol=args.symbol)
     funding_times, funding_rates = fetch_funding_rate_history(symbol=args.symbol, limit=30)
     if funding_info:
         logger.info(f"Current funding rate: {funding_info['rate']:.4f}%")
-    
     # 3. Calculate indicators and generate chart
     logger.info("Step 3/4: Calculating technical indicators and generating chart...")
     # 计算均线
@@ -176,37 +171,28 @@ def run(args):
             ma_dict=ma_dict_display, stats=stats, return_bytes=False)
         logger.info(f"Chart saved: {save_path}")
         image_bytes = None
-    
     # 4. AI analysis
     logger.info(f"Step 4/4: Performing AI analysis with {model_display}...")
     try:
-        # advisor = PositionAdvisor(service=args.service, model=args.model)
-        # result = advisor.analyze(
-        #     image_path=save_path, 
-        #     image_bytes=image_bytes, 
-        #     symbol=args.symbol, 
-        #     interval=args.interval, 
-        #     current_price=current_price)
-        
+        advisor = PositionAdvisor(service=args.service, model=args.model)
+        result = advisor.analyze(
+            image_path=save_path, 
+            image_bytes=image_bytes, 
+            symbol=args.symbol, 
+            interval=args.interval, 
+            current_price=current_price)
         # Execute trade if enabled
+        trader = None
         if args.trade and result:
             logger.info("Executing trade...")
             try:
                 from vquant.executor.trader import Trader
-                trader = Trader(args.init_pos, account=args.account)
+                trader = Trader(name=args.name, account=args.account)
                 trader.trade(result, args)
                 logger.info("Trade execution completed")
-            except ImportError as import_error:
-                logger.error(f"Failed to import trading module: {import_error}")
-                logger.error("Please ensure binance.fut and binance.auth modules are installed")
             except Exception as trade_error:
-                logger.error(f"Trade execution failed: {trade_error}", exc_info=True)
-        
-        return {
-            'chart_path': save_path or 'memory',
-            'stats': stats,
-            'analysis': result
-        }
+                logger.exception(f"Trade execution failed: {trade_error}", exc_info=True)
+        return True
     except Exception as e:
         logger.error(f"AI analysis failed: {e}", exc_info=True)
         logger.info("Tip: Please ensure you have set the correct API key environment variables")
@@ -244,17 +230,16 @@ def parse_arguments():
         '--trade', '-t', action='store_true',
         help='Enable trading execution mode (default: analysis only)')
     parser.add_argument(
-        '--init-pos', type=float, default=0.0,
-        help='init pos thant not belongs to this strategy (default: 0.0)')
-    parser.add_argument(
-        '--volume', type=float, default=0.002, # 0.002 BTC
-        help='init pos thant not belongs to this strategy (default: 0.0)')
+        '--volume', type=float, default=0, help='max trading volumes(default: 0.0)')
     parser.add_argument(
         '--threshold', type=float, default=0.5, # (0,1)
         help='using with volume, > threshold then xxx < -theshold then xxx (default: 0.5)')
     parser.add_argument(
         '--account', '-a', type=str, default='li',
         help='Trading account name (default: li)')
+    parser.add_argument(
+        '--name', type=str, required=True,
+        help='Strategy name (must be unique, prevents duplicate instances) (default: default)')
     # Technical parameters
     parser.add_argument(
         '--limit', '-l', type=int, default=72,
@@ -285,11 +270,8 @@ def main():
     logger.info(f"Trading Pair: {args.symbol} | Period: {args.interval}")
     logger.info("="*60)
     # Run analysis
-    result = run(args)
-    if result:
-        logger.info("="*60)
+    if run(args):
         logger.info("Analysis Completed!")
-        logger.info("="*60)
     else:
         logger.error("Analysis Failed")
         sys.exit(1)
