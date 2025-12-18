@@ -23,7 +23,7 @@ class PositionManager:
         self.cli = cli
         self.name = name
         # Order state file for tracking pending orders
-        self.state_dir = 'logs/orders'
+        self.state_dir = 'positions'
         os.makedirs(self.state_dir, exist_ok=True)
         self.state_file = os.path.join(self.state_dir, f'{name}_order_state.json')
         # Check for duplicate strategy instances
@@ -111,7 +111,7 @@ class PositionManager:
                 # Fall through to return current position from state
         # No pending order, return current position
         position = float(state.get('position', 0))
-        logger.debug(f"Current strategy position for {symbol}: {position}")
+        logger.debug(f"Current strategy position for {self.name}: {position}")
         return position
     
     def _save_order_state(self, symbol: str, order_id: int, side: str, quantity: float, position: float):
