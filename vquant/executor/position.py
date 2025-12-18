@@ -30,15 +30,6 @@ class PositionManager:
         if os.path.exists(self.state_file):
             logger.error("Please use a different strategy name (--name) or stop the existing instance.")
             raise RuntimeError(f"Strategy '{name}' is already running. Use a different name.")
-        # Create lock file
-        try:
-            with open(self.lock_file, 'w') as f:
-                import datetime
-                f.write(f"Strategy: {name}\nStarted: {datetime.datetime.now()}\n")
-            logger.info(f"Created lock file for strategy '{name}'")
-        except Exception as e:
-            logger.error(f"Failed to create lock file: {e}")
-            raise
         logger.debug(f"PositionManager initialized for strategy '{name}'")
     
     def get_current_position(self) -> float:
