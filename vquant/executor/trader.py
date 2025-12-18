@@ -46,11 +46,8 @@ class Trader:
         logger.info(f"Current position: {curpos}")
         
         # Calculate adjustment volume
-<<<<<<< HEAD
-        target = args.volume if target > args.threshold else -args.volume if target < -args.threshold else 0
-=======
-        target = volume * target # here target is a ratio, volume is user defined max volume
->>>>>>> fb8d75f (fix the quantity)
+        # target = args.volume if target > args.threshold else -args.volume if target < -args.threshold else 0
+        target = (args.volume * target) # here target is weighted position ratio and volume is max position size
         volume = target - curpos + self.init_pos
         quantity = round_it(abs(volume), lot_round_at(symbol))
         
