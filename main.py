@@ -189,11 +189,12 @@ def run(args):
             current_price=current_price)
         
         # Execute trade if enabled
+        trader = None
         if args.trade and result:
             logger.info("Executing trade...")
             try:
                 from vquant.executor.trader import Trader
-                trader = Trader(args.init_pos, account=args.account, strategy_id=args.strategy_id)
+                trader = Trader(args.init_pos, account=args.account, name=args.name)
                 trader.trade(result, args)
                 logger.info("Trade execution completed")
             except ImportError as import_error:
@@ -201,11 +202,16 @@ def run(args):
                 logger.error("Please ensure binance.fut and binance.auth modules are installed")
             except Exception as trade_error:
                 logger.error(f"Trade execution failed: {trade_error}", exc_info=True)
+            finally:
+                # Cleanup lock file
+                if trader and hasattr(trader, 'pm'):
+                    trader.pm.cleanup()
         
         return {
             'chart_path': save_path or 'memory',
             'stats': stats,
-            'analysis': result
+            'analysis': result,
+            'trader': trader  # Keep reference for cleanup
         }
     except Exception as e:
         logger.error(f"AI analysis failed: {e}", exc_info=True)
@@ -256,8 +262,8 @@ def parse_arguments():
         '--account', '-a', type=str, default='li',
         help='Trading account name (default: li)')
     parser.add_argument(
-        '--strategy-id', type=str, default='default',
-        help='Strategy identifier to distinguish positions from different strategies (default: default)')
+        '--name', type=str, default='default',
+        help='Strategy name (must be unique, prevents duplicate instances) (default: default)')
     # Technical parameters
     parser.add_argument(
         '--limit', '-l', type=int, default=72,
