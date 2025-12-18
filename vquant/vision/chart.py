@@ -148,11 +148,12 @@ def fetch_binance_klines(symbol='BTCUSDT', interval='1h', limit=100, extra_data=
         logger.error(f"Failed to fetch K-line data: {e}", exc_info=True)
         return None
 
-def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dict=None, stats=None):
+def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dict=None, stats=None, return_bytes=False):
     """
     Use mplfinance to plot candlestick chart with moving averages and statistics
     ma_dict: dictionary with MA period as key and MA series as value
     stats: dictionary with statistical information to display
+    return_bytes: If True, return image bytes instead of saving to file
     """
     if df is None or df.empty:
         print("No data to plot")
@@ -372,17 +373,37 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
                        fontfamily='monospace',
                        bbox=bbox_props,
                        linespacing=1.15)
-    plt.savefig(save_path, dpi=100, bbox_inches='tight', pad_inches=0)
-    plt.close()
     
-    # 获取文件信息
-    from PIL import Image
-    img = Image.open(save_path)
-    width, height = img.size
-    file_size = os.path.getsize(save_path) / 1024  # KB
-    tokens = (width * height) / 1024  # 估算token数
-    logger.info(f"Chart saved: {save_path}")
-    logger.debug(f"Resolution: {width}x{height}px ({file_size:.1f} KB, ~{tokens:.0f} tokens)")
+    # Save to file or return bytes
+    if return_bytes:
+        import io
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight', pad_inches=0)
+        buf.seek(0)
+        image_bytes = buf.read()
+        plt.close()
+        buf.close()
+        
+        # 估算信息
+        width = 1280  # 估算值
+        height = 960
+        file_size = len(image_bytes) / 1024  # KB
+        tokens = (width * height) / 1024
+        logger.debug(f"Chart generated in memory: ~{file_size:.1f} KB, ~{tokens:.0f} tokens")
+        return image_bytes
+    else:
+        plt.savefig(save_path, dpi=100, bbox_inches='tight', pad_inches=0)
+        plt.close()
+        
+        # 获取文件信息
+        from PIL import Image
+        img = Image.open(save_path)
+        width, height = img.size
+        file_size = os.path.getsize(save_path) / 1024  # KB
+        tokens = (width * height) / 1024  # 估算token数
+        logger.info(f"Chart saved: {save_path}")
+        logger.debug(f"Resolution: {width}x{height}px ({file_size:.1f} KB, ~{tokens:.0f} tokens)")
+        return None
 
 if __name__ == '__main__':
     # Configuration
