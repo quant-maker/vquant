@@ -1,0 +1,59 @@
+{
+  "symbol": "DOGEUSDC",
+  "updated_at": "2025-12-19T18:06:46.794507",
+  "thresholds": {
+    "ma_deviation": {
+      "extreme_bullish": 1.9542077396494635,
+      "strong_bullish": 1.379598011884769,
+      "bullish": 0.6216053600031637,
+      "neutral_high": 0,
+      "neutral_low": -0.6471061361208913,
+      "bearish": -1.4657701067899904,
+      "strong_bearish": -2.1709494184222597
+    },
+    "momentum": {
+      "extreme_bullish": 4.843101887930895,
+      "strong_bullish": 3.447751811739588,
+      "bullish": 1.5778050240783212,
+      "neutral_high": 0,
+      "neutral_low": -1.890864962362134,
+      "bearish": -3.715343530720168,
+      "strong_bearish": -5.222136946298903
+    },
+    "impulse": {
+      "extreme_bullish": 6.694193867459759,
+      "strong_bullish": 4.516309800705239,
+      "bullish": 1.8654155611359036,
+      "neutral_high": 0,
+      "neutral_low": -1.9712045969217813,
+      "bearish": -4.446525590264678,
+      "strong_bearish": -6.649735882510434
+    },
+    "rsi": {
+      "extreme_overbought": 77.5178523535647,
+      "overbought": 72.49640899363882,
+      "slightly_overbought": 62.25233181928638,
+      "neutral_high": 49.57264957264962,
+      "neutral_low": 37.336173949304296,
+      "slightly_oversold": 27.221456258200675,
+      "oversold": 22.115755847566444
+    },
+    "macd_diff": {
+      "extreme_bullish": 0.5112519831232579,
+      "strong_bullish": 0.3820764213578768,
+      "bullish": 0.19620287418302687,
+      "neutral_high": 0,
+      "neutral_low": -0.1915683572621517,
+      "bearish": -0.39040104033500217,
+      "strong_bearish": -0.557086731234797
+    },
+    "volume_change": {
+      "extreme_volume": 176.12329699427832,
+      "high_volume": 104.84323676070545,
+      "above_average": 26.16062124736102,
+      "neutral": -21.111624856965467,
+      "below_average": -47.96855082622084,
+      "low_volume": -64.16145165898705
+    }
+  }
+}

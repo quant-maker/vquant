@@ -2,8 +2,8 @@
 # -*- coding:utf-8 -*-
 
 """
-Quantitative Predictor - 基于 funding rate 和技术指标的预测模型
-预测涨跌并输出仓位建议
+Quantitative Predictor - Prediction model based on funding rate and technical indicators
+Predicts market direction and provides position recommendations
 """
 
 import logging
@@ -17,47 +17,47 @@ logger = logging.getLogger(__name__)
 
 class QuantPredictor:
     """
-    量化预测器 - 基于多个因子综合评分预测市场方向
+    Quantitative Predictor - Predicts market direction based on multiple factor scores
 
-    评分因子：
-    1. Funding Rate - 资金费率反映多空力量对比
-    2. Momentum - 价格动量趋势
-    3. Impulse - 动量加速度（冲量）
-    4. MA趋势 - 价格相对MA7位置
-    5. RSI - 超买超卖指标
-    6. MACD - MACD金叉死叉
-    7. Volume - 成交量确认
+    Scoring Factors:
+    1. Funding Rate - Reflects long/short balance
+    2. Momentum - Price momentum trend
+    3. Impulse - Momentum acceleration
+    4. MA Trend - Price position relative to MA7
+    5. RSI - Overbought/oversold indicator
+    6. MACD - MACD crossover signals
+    7. Volume - Volume confirmation
     """
 
     def __init__(self, symbol: str = "BTCUSDC", config_dir: str = "config"):
         """
-        初始化预测器
+        Initialize predictor
         
         Args:
-            symbol: 交易对符号（用于加载对应的阈值配置）
-            config_dir: 配置文件目录
+            symbol: Trading pair symbol (used to load corresponding threshold config)
+            config_dir: Configuration file directory
         """
         self.symbol = symbol
         self.weights = {
-            "funding_rate": 0.20,  # 资金费率权重
-            "momentum": 0.20,      # 动量权重
-            "impulse": 0.15,       # 冲量权重（动量加速度）
-            "ma_trend": 0.15,      # 均线趋势权重
-            "rsi": 0.12,           # RSI权重
-            "macd": 0.10,          # MACD权重
-            "volume": 0.08,        # 成交量权重
+            "funding_rate": 0.20,  # Funding rate weight
+            "momentum": 0.20,      # Momentum weight
+            "impulse": 0.15,       # Impulse weight (momentum acceleration)
+            "ma_trend": 0.15,      # MA trend weight
+            "rsi": 0.12,           # RSI weight
+            "macd": 0.10,          # MACD weight
+            "volume": 0.08,        # Volume weight
         }
         
-        # 加载阈值配置（必须存在，否则抛出异常）
+        # Load threshold configuration (must exist, otherwise throw exception)
         self.thresholds = self._load_thresholds(symbol, config_dir)
     
     def _load_thresholds(self, symbol: str, config_dir: str) -> Dict:
         """
-        从JSON文件加载阈值配置
+        Load threshold configuration from JSON file
         
         Args:
-            symbol: 交易对符号
-            config_dir: 配置文件目录
+            symbol: Trading pair symbol
+            config_dir: Configuration file directory
             
         Returns:
             Threshold configuration dictionary
@@ -88,72 +88,72 @@ class QuantPredictor:
             raise ValueError(f"Config file JSON format error: {e}")
     def predict(self, stats: Dict[str, Any]) -> Dict[str, Any]:
         """
-        基于市场数据预测涨跌并给出仓位建议
+        Predict market direction based on market data and provide position recommendations
 
         Args:
-            stats: 包含技术指标和市场数据的字典
-                - funding_rate: 当前资金费率
-                - momentum: 价格动量（近期均价相对早期均价的变化率）
-                - current_ma7: 当前MA7值
-                - current_price: 当前价格
-                - current_rsi: 当前RSI值
-                - current_macd: 当前MACD值
-                - current_signal: 当前MACD信号线值
-                - volume_strength: 成交量强度
+            stats: Dictionary containing technical indicators and market data
+                - funding_rate: Current funding rate
+                - momentum: Price momentum (rate of change between recent and earlier averages)
+                - current_ma7: Current MA7 value
+                - current_price: Current price
+                - current_rsi: Current RSI value
+                - current_macd: Current MACD value
+                - current_signal: Current MACD signal line value
+                - volume_strength: Volume strength
 
         Returns:
             {
-                "position": float,  # -1.0 到 1.0 的仓位建议
+                "position": float,  # Position recommendation from -1.0 to 1.0
                 "confidence": str,  # "low", "medium", "high"
-                "score": float,     # 综合评分 -100 到 100
-                "factors": dict,    # 各因子得分详情
-                "reasoning": str,   # 决策理由
+                "score": float,     # Composite score from -100 to 100
+                "factors": dict,    # Individual factor scores
+                "reasoning": str,   # Decision reasoning
             }
         """
-        logger.info("开始预测市场方向...")
+        logger.info("Starting market direction prediction...")
 
-        # 计算各因子得分
+        # Calculate individual factor scores
         factors = {}
 
-        # 1. Funding Rate 评分 (-100 到 100)
+        # 1. Funding Rate score (-100 to 100)
         factors["funding_rate"] = self._score_funding_rate(stats.get("funding_rate", 0))
 
-        # 2. Momentum 评分 (-100 到 100)
+        # 2. Momentum score (-100 to 100)
         factors["momentum"] = self._score_momentum(
             stats.get("momentum", 0)
         )
 
-        # 3. Impulse 评分 (-100 到 100)
+        # 3. Impulse score (-100 to 100)
         factors["impulse"] = self._score_impulse(
             stats.get("impulse", 0)
         )
 
-        # 4. MA 趋势评分 (-100 到 100)
+        # 4. MA trend score (-100 to 100)
         factors["ma_trend"] = self._score_ma_trend(
             stats.get("current_ma7"), stats.get("current_price")
         )
 
-        # 5. RSI 评分 (-100 到 100)
+        # 5. RSI score (-100 to 100)
         factors["rsi"] = self._score_rsi(stats.get("current_rsi"))
 
-        # 6. MACD 评分 (-100 到 100)
+        # 6. MACD score (-100 to 100)
         factors["macd"] = self._score_macd(
             stats.get("current_macd"), stats.get("current_signal")
         )
 
-        # 7. Volume 评分 (-100 到 100)
+        # 7. Volume score (-100 to 100)
         factors["volume"] = self._score_volume(stats.get("volume_strength", 0))
 
-        # 计算加权综合得分
+        # Calculate weighted composite score
         total_score = sum(factors[key] * self.weights[key] for key in factors.keys())
 
-        # 将得分转换为仓位建议 (-1.0 到 1.0)
+        # Convert score to position recommendation (-1.0 to 1.0)
         position = self._score_to_position(total_score)
 
-        # 评估置信度
+        # Assess confidence
         confidence = self._calculate_confidence(factors, total_score)
 
-        # 生成决策理由
+        # Generate decision reasoning
         reasoning = self._generate_reasoning(factors, total_score, stats)
 
         result = {
@@ -165,79 +165,79 @@ class QuantPredictor:
         }
 
         logger.info(
-            f"预测完成: position={result['position']}, confidence={result['confidence']}"
+            f"Prediction complete: position={result['position']}, confidence={result['confidence']}"
         )
-        logger.debug(f"因子得分: {result['factors']}")
+        logger.debug(f"Factor scores: {result['factors']}")
 
         return result
 
     def _score_funding_rate(self, funding_rate: Optional[float]) -> float:
         """
-        资金费率评分（基于DOGE/BTC实际历史数据调整）
+        Funding rate scoring (adjusted based on DOGE/BTC actual historical data)
         
-        实际数据分析（100期历史）：
-        - 平均值：0.003%
-        - 90分位：0.009%
-        - 10分位：-0.002%
-        - 最大值：0.010%
-        - 最小值：-0.011%
-        - 100%数据在 -0.02% 到 0.02% 之间
+        Actual data analysis (100 periods history):
+        - Mean: 0.003%
+        - 90th percentile: 0.009%
+        - 10th percentile: -0.002%
+        - Max: 0.010%
+        - Min: -0.011%
+        - 100% data within -0.02% to 0.02%
         
-        资金费率正值：多头支付空头，市场偏多 -> 可能过热
-        资金费率负值：空头支付多头，市场偏空 -> 可能超跌
+        Positive funding rate: Longs pay shorts, market is bullish -> May be overheated
+        Negative funding rate: Shorts pay longs, market is bearish -> May be oversold
         """
         if funding_rate is None:
             return 0.0
         
-        # 基于实际数据分布设置阈值
-        # 90分位约0.009%，10分位约-0.002%
+        # Set thresholds based on actual data distribution
+        # 90th percentile ~0.009%, 10th percentile ~-0.002%
         if funding_rate > 0.010:
-            return -100.0  # 极度罕见，强烈看跌
+            return -100.0  # Extremely rare, strongly bearish
         elif funding_rate > 0.008:
-            return -80.0   # >90分位，多头过热
+            return -80.0   # >90th percentile, longs overheated
         elif funding_rate > 0.006:
-            return -50.0   # >75分位，多头偏强
+            return -50.0   # >75th percentile, longs strong
         elif funding_rate > 0.003:
-            return -20.0   # >中位数，多头略强
+            return -20.0   # >Median, longs slightly strong
         elif funding_rate > -0.002:
-            return 0.0     # 中性区间（10分位到中位数之间）
+            return 0.0     # Neutral range (10th percentile to median)
         elif funding_rate > -0.005:
-            return 30.0    # <10分位，空头偏强
+            return 30.0    # <10th percentile, shorts strong
         elif funding_rate > -0.008:
-            return 60.0    # 空头较强
+            return 60.0    # Shorts quite strong
         elif funding_rate > -0.010:
-            return 80.0    # 接近历史最小值
+            return 80.0    # Near historical minimum
         else:
-            return 100.0   # 极度罕见，强烈看涨
+            return 100.0   # Extremely rare, strongly bullish
     
     def _score_momentum(self, momentum: float) -> float:
         """
-        动量评分（基于配置文件中的阈值）
+        Momentum scoring (based on thresholds in config file)
         
-        momentum: 近期均价相对早期均价的变化率（%）
+        momentum: Rate of change between recent and earlier averages (%)
         """
         t = self.thresholds.get('momentum', {})
         
         if momentum > t.get('extreme_bullish', 4):
-            return 100.0   # 极强上涨
+            return 100.0   # Extremely strong uptrend
         elif momentum > t.get('strong_bullish', 2.5):
-            return 80.0    # 强势上涨
+            return 80.0    # Strong uptrend
         elif momentum > t.get('bullish', 1.0):
-            return 50.0    # 上涨
+            return 50.0    # Uptrend
         elif momentum > t.get('neutral_high', 0):
-            return 20.0    # 微涨
+            return 20.0    # Slightly up
         elif momentum > t.get('neutral_low', -1.5):
-            return -20.0   # 微跌
+            return -20.0   # Slightly down
         elif momentum > t.get('bearish', -3.0):
-            return -50.0   # 下跌
+            return -50.0   # Downtrend
         elif momentum > t.get('strong_bearish', -4.0):
-            return -80.0   # 强势下跌
+            return -80.0   # Strong downtrend
         else:
-            return -100.0  # 极弱下跌
+            return -100.0  # Extremely weak downtrend
 
     def _score_impulse(self, impulse: float) -> float:
         """
-        冲量评分（基于配置文件中的阈值）
+        Impulse scoring (based on thresholds in config file)
         
         Impulse measures momentum acceleration - indicates if momentum is speeding up or slowing down
         Positive impulse: momentum accelerating (bullish)
@@ -246,63 +246,63 @@ class QuantPredictor:
         t = self.thresholds.get('impulse', {})
         
         if impulse > t.get('extreme_bullish', 5):
-            return 100.0   # 极强加速
+            return 100.0   # Extremely strong acceleration
         elif impulse > t.get('strong_bullish', 3):
-            return 80.0    # 强势加速
+            return 80.0    # Strong acceleration
         elif impulse > t.get('bullish', 1.5):
-            return 50.0    # 加速
+            return 50.0    # Acceleration
         elif impulse > t.get('neutral_high', 0):
-            return 20.0    # 微加速
+            return 20.0    # Slight acceleration
         elif impulse > t.get('neutral_low', -1.5):
-            return -20.0   # 微减速
+            return -20.0   # Slight deceleration
         elif impulse > t.get('bearish', -3):
-            return -50.0   # 减速
+            return -50.0   # Deceleration
         elif impulse > t.get('strong_bearish', -5):
-            return -80.0   # 强势减速
+            return -80.0   # Strong deceleration
         else:
-            return -100.0  # 极弱减速
+            return -100.0  # Extremely weak deceleration
 
     def _score_ma_trend(
         self, ma7: Optional[float], current_price: Optional[float]
     ) -> float:
         """
-        MA7趋势评分（基于配置文件中的阈值）
+        MA7 trend scoring (based on thresholds in config file)
 
-        价格在MA7上方：趋势向上
-        价格在MA7下方：趋势向下
+        Price above MA7: Uptrend
+        Price below MA7: Downtrend
         """
         if ma7 is None or current_price is None:
             return 0.0
 
-        # 计算价格偏离MA7的程度
+        # Calculate price deviation from MA7
         deviation = (current_price - ma7) / ma7 * 100 if ma7 > 0 else 0
 
-        # 使用配置的阈值评分
+        # Score using configured thresholds
         t = self.thresholds.get('ma_deviation', {})
         
         if deviation > t.get('extreme_bullish', 1.5):
-            return 100.0   # 极强上涨
+            return 100.0   # Extremely strong uptrend
         elif deviation > t.get('strong_bullish', 1.0):
-            return 80.0    # 强势上涨
+            return 80.0    # Strong uptrend
         elif deviation > t.get('bullish', 0.4):
-            return 50.0    # 上涨
+            return 50.0    # Uptrend
         elif deviation > t.get('neutral_high', 0):
-            return 20.0    # 微涨
+            return 20.0    # Slightly up
         elif deviation > t.get('neutral_low', -0.4):
-            return -20.0   # 微跌
+            return -20.0   # Slightly down
         elif deviation > t.get('bearish', -1.0):
-            return -50.0   # 下跌
+            return -50.0   # Downtrend
         elif deviation > t.get('strong_bearish', -2.0):
-            return -80.0   # 强势下跌
+            return -80.0   # Strong downtrend
         else:
-            return -100.0  # 极弱下跌
+            return -100.0  # Extremely weak downtrend
 
     def _score_rsi(self, rsi: Optional[float]) -> float:
         """
-        RSI 评分（基于配置文件中的阈值）
+        RSI scoring (based on thresholds in config file)
 
-        RSI高：超买，可能回调
-        RSI低：超卖，可能反弹
+        High RSI: Overbought, possible pullback
+        Low RSI: Oversold, possible bounce
         """
         if rsi is None:
             return 0.0
@@ -310,28 +310,28 @@ class QuantPredictor:
         t = self.thresholds.get('rsi', {})
         
         if rsi > t.get('extreme_overbought', 79):
-            return -100.0  # 极度超买
+            return -100.0  # Extremely overbought
         elif rsi > t.get('overbought', 73):
-            return -80.0   # 超买
+            return -80.0   # Overbought
         elif rsi > t.get('slightly_overbought', 61):
-            return -50.0   # 偏强
+            return -50.0   # Slightly strong
         elif rsi > t.get('neutral_high', 48):
-            return -20.0   # 略强
+            return -20.0   # Moderately strong
         elif rsi > t.get('neutral_low', 35):
-            return 20.0    # 略弱
+            return 20.0    # Moderately weak
         elif rsi > t.get('slightly_oversold', 20):
-            return 50.0    # 偏弱
+            return 50.0    # Slightly weak
         elif rsi > t.get('oversold', 16):
-            return 80.0    # 超卖
+            return 80.0    # Oversold
         else:
-            return 100.0   # 极度超卖
+            return 100.0   # Extremely oversold
 
     def _score_macd(self, macd: Optional[float], signal: Optional[float]) -> float:
         """
-        MACD 评分（基于配置文件中的阈值）
+        MACD scoring (based on thresholds in config file)
 
-        MACD > Signal: 金叉，看涨
-        MACD < Signal: 死叉，看跌
+        MACD > Signal: Golden cross, bullish
+        MACD < Signal: Death cross, bearish
         """
         if macd is None or signal is None:
             return 0.0
@@ -340,88 +340,88 @@ class QuantPredictor:
         t = self.thresholds.get('macd_diff', {})
 
         if diff > t.get('extreme_bullish', 0.004):
-            return 100.0        # 极强金叉
+            return 100.0        # Extremely strong golden cross
         elif diff > t.get('strong_bullish', 0.003):
-            return 80.0         # 强金叉
+            return 80.0         # Strong golden cross
         elif diff > t.get('bullish', 0.0015):
-            return 50.0         # 金叉
+            return 50.0         # Golden cross
         elif diff > t.get('neutral_high', 0):
-            return 20.0         # 弱金叉
+            return 20.0         # Weak golden cross
         elif diff > t.get('neutral_low', -0.0014):
-            return -20.0        # 弱死叉
+            return -20.0        # Weak death cross
         elif diff > t.get('bearish', -0.003):
-            return -50.0        # 死叉
+            return -50.0        # Death cross
         elif diff > t.get('strong_bearish', -0.004):
-            return -80.0        # 强死叉
+            return -80.0        # Strong death cross
         else:
-            return -100.0       # 极强死叉
+            return -100.0       # Extremely strong death cross
 
     def _score_volume(self, volume_strength: float) -> float:
         """
-        成交量评分（基于配置文件中的阈值）
+        Volume scoring (based on thresholds in config file)
 
-        volume_strength: 相对20周期均值的变化百分比
-        放量确认趋势，缩量趋势减弱
+        volume_strength: Percentage change relative to 20-period average
+        High volume confirms trend, low volume weakens trend
         """
         t = self.thresholds.get('volume_change', {})
         
         if volume_strength > t.get('extreme_volume', 230):
-            return 100.0   # 极度放量
+            return 100.0   # Extremely high volume
         elif volume_strength > t.get('high_volume', 120):
-            return 80.0    # 显著放量
+            return 80.0    # Significantly high volume
         elif volume_strength > t.get('above_average', 20):
-            return 50.0    # 放量
+            return 50.0    # High volume
         elif volume_strength > t.get('neutral', -30):
-            return 0.0     # 中性区间
+            return 0.0     # Neutral range
         elif volume_strength > t.get('below_average', -55):
-            return -30.0   # 缩量
+            return -30.0   # Low volume
         elif volume_strength > t.get('low_volume', -70):
-            return -60.0   # 显著缩量
+            return -60.0   # Significantly low volume
         else:
-            return -80.0   # 极度缩量
+            return -80.0   # Extremely low volume
 
     def _score_to_position(self, score: float) -> float:
         """
-        将评分转换为仓位建议
+        Convert score to position recommendation
 
-        score: -100 到 100
-        position: -1.0 到 1.0
+        score: -100 to 100
+        position: -1.0 to 1.0
 
-        使用非线性映射，放大极端信号
+        Use non-linear mapping to amplify extreme signals
         """
-        # 线性映射
+        # Linear mapping
         position = score / 100.0
 
-        # 非线性调整：放大强信号，抑制弱信号
+        # Non-linear adjustment: amplify strong signals, suppress weak signals
         if abs(position) > 0.6:
-            # 强信号：保持或放大
+            # Strong signal: maintain or amplify
             position = position * 1.1
         elif abs(position) < 0.2:
-            # 弱信号：进一步抑制
+            # Weak signal: further suppress
             position = position * 0.5
 
-        # 限制在 -1.0 到 1.0
+        # Limit to -1.0 to 1.0
         return max(-1.0, min(1.0, position))
 
     def _calculate_confidence(
         self, factors: Dict[str, float], total_score: float
     ) -> str:
         """
-        计算置信度
+        Calculate confidence level
 
-        high: 因子方向一致性高，且总分绝对值大
-        medium: 因子方向部分一致，或总分中等
-        low: 因子方向分歧大，或总分接近0
+        high: Factors highly aligned, and large absolute total score
+        medium: Factors partially aligned, or moderate total score
+        low: Factors divergent, or total score close to 0
         """
-        # 统计正负因子
+        # Count positive and negative factors
         positive = sum(1 for v in factors.values() if v > 20)
         negative = sum(1 for v in factors.values() if v < -20)
         neutral = len(factors) - positive - negative
 
-        # 方向一致性
+        # Direction consistency
         consistency = max(positive, negative) / len(factors)
 
-        # 综合评估
+        # Overall assessment
         abs_score = abs(total_score)
 
         if consistency > 0.75 and abs_score > 50:
@@ -434,67 +434,67 @@ class QuantPredictor:
     def _generate_reasoning(
         self, factors: Dict[str, float], total_score: float, stats: Dict[str, Any]
     ) -> str:
-        """生成决策理由 - 结构化输出：结论 + 支持因子 + 对冲因子"""
+        """Generate decision reasoning - Structured output: conclusion + supporting factors + hedging factors"""
 
-        # 分类因子：看多、看空、中性
+        # Classify factors: bullish, bearish, neutral
         bullish_factors = []
         bearish_factors = []
         neutral_factors = []
 
-        # Funding Rate（基于实际数据分布调整）
+        # Funding Rate (adjusted based on actual data distribution)
         fr = stats.get("funding_rate", 0)
         if fr is not None:
             if fr > 0.008:
-                bearish_factors.append(f"资金费率{fr:.4f}%过高（>90分位），多头过热")
+                bearish_factors.append(f"Funding rate {fr:.4f}% too high (>90th percentile), longs overheated")
             elif fr > 0.006:
-                bearish_factors.append(f"资金费率{fr:.4f}%偏高（>75分位）")
+                bearish_factors.append(f"Funding rate {fr:.4f}% high (>75th percentile)")
             elif fr > 0.003:
-                bearish_factors.append(f"资金费率{fr:.4f}%略高")
+                bearish_factors.append(f"Funding rate {fr:.4f}% slightly high")
             elif fr < -0.005:
-                bullish_factors.append(f"资金费率{fr:.4f}%偏低，空头占优")
+                bullish_factors.append(f"Funding rate {fr:.4f}% low, shorts dominating")
             elif fr < -0.002:
-                bullish_factors.append(f"资金费率{fr:.4f}%略低（<10分位）")
+                bullish_factors.append(f"Funding rate {fr:.4f}% slightly low (<10th percentile)")
             else:
-                neutral_factors.append(f"资金费率{fr:.4f}%中性")
+                neutral_factors.append(f"Funding rate {fr:.4f}% neutral")
 
         # Momentum
         momentum = stats.get("momentum", 0)
         if momentum > 2:
-            bullish_factors.append(f"动量强劲+{momentum:.1f}%")
+            bullish_factors.append(f"Strong momentum +{momentum:.1f}%")
         elif momentum > 0.5:
-            bullish_factors.append(f"动量向上+{momentum:.1f}%")
+            bullish_factors.append(f"Upward momentum +{momentum:.1f}%")
         elif momentum < -2:
-            bearish_factors.append(f"动量下跌{momentum:.1f}%")
+            bearish_factors.append(f"Declining momentum {momentum:.1f}%")
         elif momentum < -0.5:
-            bearish_factors.append(f"动量向下{momentum:.1f}%")
+            bearish_factors.append(f"Downward momentum {momentum:.1f}%")
 
-        # MA7 趋势
+        # MA7 trend
         ma7 = stats.get("current_ma7")
         current_price = stats.get("current_price")
         if ma7 and current_price:
             deviation = (current_price - ma7) / ma7 * 100 if ma7 > 0 else 0
             if deviation > 2:
-                bullish_factors.append(f"价格高于MA7 +{deviation:.1f}%")
+                bullish_factors.append(f"Price above MA7 +{deviation:.1f}%")
             elif deviation > 0.5:
-                bullish_factors.append(f"价格略高于MA7 +{deviation:.1f}%")
+                bullish_factors.append(f"Price slightly above MA7 +{deviation:.1f}%")
             elif deviation < -2:
-                bearish_factors.append(f"价格低于MA7 {deviation:.1f}%")
+                bearish_factors.append(f"Price below MA7 {deviation:.1f}%")
             elif deviation < -0.5:
-                bearish_factors.append(f"价格略低于MA7 {deviation:.1f}%")
+                bearish_factors.append(f"Price slightly below MA7 {deviation:.1f}%")
             else:
-                neutral_factors.append("价格贴近MA7")
+                neutral_factors.append("Price near MA7")
 
         # RSI
         rsi = stats.get("current_rsi")
         if rsi:
             if rsi > 70:
-                bearish_factors.append(f"RSI{rsi:.1f}超买")
+                bearish_factors.append(f"RSI {rsi:.1f} overbought")
             elif rsi > 60:
-                bearish_factors.append(f"RSI{rsi:.1f}偏高")
+                bearish_factors.append(f"RSI {rsi:.1f} high")
             elif rsi < 30:
-                bullish_factors.append(f"RSI{rsi:.1f}超卖")
+                bullish_factors.append(f"RSI {rsi:.1f} oversold")
             elif rsi < 40:
-                bullish_factors.append(f"RSI{rsi:.1f}偏低")
+                bullish_factors.append(f"RSI {rsi:.1f} low")
 
         # MACD
         macd = stats.get("current_macd")
@@ -502,64 +502,64 @@ class QuantPredictor:
         if macd and signal:
             if macd > signal:
                 if macd > 0:
-                    bullish_factors.append("MACD强势金叉")
+                    bullish_factors.append("MACD strong golden cross")
                 else:
-                    bullish_factors.append("MACD弱势金叉")
+                    bullish_factors.append("MACD weak golden cross")
             else:
                 if macd > 0:
-                    bearish_factors.append("MACD弱势死叉")
+                    bearish_factors.append("MACD weak death cross")
                 else:
-                    bearish_factors.append("MACD强势死叉")
+                    bearish_factors.append("MACD strong death cross")
 
         # Volume
         vol_strength = stats.get("volume_strength", 0)
         if vol_strength > 50:
-            bullish_factors.append(f"成交量放大{vol_strength:.0f}%")
+            bullish_factors.append(f"Volume increased {vol_strength:.0f}%")
         elif vol_strength < -50:
-            bearish_factors.append(f"成交量萎缩{vol_strength:.0f}%")
+            bearish_factors.append(f"Volume decreased {vol_strength:.0f}%")
 
-        # 构建reasoning
+        # Build reasoning
         if total_score > 50:
-            conclusion = "【做多】综合评分强势看多"
+            conclusion = "[LONG] Strong bullish signal"
         elif total_score > 20:
-            conclusion = "【小仓做多】综合评分偏多"
+            conclusion = "[SMALL LONG] Moderately bullish"
         elif total_score < -50:
-            conclusion = "【做空】综合评分强势看空"
+            conclusion = "[SHORT] Strong bearish signal"
         elif total_score < -20:
-            conclusion = "【小仓做空】综合评分偏空"
+            conclusion = "[SMALL SHORT] Moderately bearish"
         else:
-            conclusion = "【观望】综合评分中性"
+            conclusion = "[HOLD] Neutral signal"
 
         parts = [conclusion]
 
         if bullish_factors:
-            parts.append("看多信号：" + "、".join(bullish_factors))
+            parts.append("Bullish signals: " + ", ".join(bullish_factors))
 
         if bearish_factors:
-            parts.append("看空信号：" + "、".join(bearish_factors))
+            parts.append("Bearish signals: " + ", ".join(bearish_factors))
 
         if neutral_factors:
-            parts.append("中性：" + "、".join(neutral_factors))
+            parts.append("Neutral: " + ", ".join(neutral_factors))
 
-        # 如果是中性观望，特别说明为什么
+        # Special note if neutral with conflicting signals
         if abs(total_score) <= 20 and (bullish_factors or bearish_factors):
-            parts.append("多空信号相互抵消，暂不具备明确方向")
+            parts.append("Bullish and bearish signals offset, no clear direction")
 
-        return "。".join(parts) + "。"
+        return ". ".join(parts) + "."
 
 
 if __name__ == "__main__":
-    # 测试用例
+    # Test case
     logging.basicConfig(level=logging.INFO)
 
     predictor = QuantPredictor()
 
-    # 模拟数据
+    # Mock data
     test_stats = {
-        "funding_rate": 0.08,  # 资金费率偏高
-        "momentum": -3.5,           # 动量下跌
+        "funding_rate": 0.08,  # Funding rate high
+        "momentum": -3.5,           # Momentum declining
         "current_ma7": 100.5,
-        "current_price": 98.0,  # 价格低于MA7
+        "current_price": 98.0,  # Price below MA7
         "current_rsi": 65.0,
         "current_macd": 0.5,
         "current_signal": 0.3,
@@ -568,7 +568,7 @@ if __name__ == "__main__":
 
     result = predictor.predict(test_stats)
 
-    print("\n=== 预测结果 ===")
+    print("\n=== Prediction Result ===")
     print(f"Position: {result['position']}")
     print(f"Confidence: {result['confidence']}")
     print(f"Score: {result['score']}")
