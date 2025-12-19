@@ -53,7 +53,6 @@ class WaveTrader:
         self.buy_threshold = config.get('buy_threshold', -0.5)
         self.sell_threshold = config.get('sell_threshold', 0.5)
         self.min_trade_interval = config.get('min_trade_interval', 300)
-        self.max_position = config.get('max_position', 1.0)
         self.state_file = Path(f"data/wave_state_{name}.json")
         
         logger.info(
