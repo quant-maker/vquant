@@ -235,11 +235,10 @@ class WaveTrader:
             "reasoning": "",
             "price_change": price_change
         }
-        
         # First trade - establish initial position
         if price_change is None:
             signal["reasoning"] = f"Initial entry at ${current_price:.2f}"
-            self._record_trade("buy", current_price, volume, signal["reasoning"])
+            self._record_trade("hold", current_price, 0.0, signal["reasoning"])
             return signal
         
         # Check for buy signal (price dropped)
@@ -272,4 +271,4 @@ class WaveTrader:
             f"Signal: {signal['action'].upper()} - {signal['reasoning']}"
         )
         
-        return signal 
+        return signal
