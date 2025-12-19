@@ -110,7 +110,7 @@ class PositionManager:
         logger.debug(f"Current strategy position for {self.name}: {position}")
         return position
     
-    def _save_order_state(self, symbol: str, order_id: int, side: str, quantity: float, position: float):
+    def _save_order_state(self, symbol: str, order_id: int, side: str, quantity: float, position: float, price: float = None):
         """
         Save order state to file
         Args:
@@ -119,6 +119,7 @@ class PositionManager:
             side: Order side (BUY/SELL)
             quantity: Order quantity
             position: Current position BEFORE this order (not after)
+            price: Order price
         """
         state = {
             'symbol': symbol,
@@ -126,12 +127,13 @@ class PositionManager:
             'side': side,
             'quantity': quantity,
             'position': position,
+            'price': price,
             'processed': False  # Mark as unprocessed when placing new order
         }
         try:
             with open(self.state_file, 'w') as f:
                 json.dump(state, f, indent=4)
-            logger.debug(f"Saved order state: {state}")
+            logger.info(f"TRADE|{position=}|{side=}|{quantity=}|{price=}")
         except Exception as e:
             logger.exception(f"Failed to save order state: {e}")
     
@@ -169,7 +171,7 @@ class PositionManager:
         except Exception as e:
             logger.exception(f"Failed to mark order as processed: {e}")
     
-    def save_new_order(self, symbol: str, order_id: int, side: str, quantity: float, position: float):
+    def save_new_order(self, symbol: str, order_id: int, side: str, quantity: float, position: float, price: float = None):
         """
         Save newly placed order state
         Args:
@@ -178,9 +180,10 @@ class PositionManager:
             side: Order side (BUY/SELL)
             quantity: Order quantity
             position: Current position BEFORE placing this order
+            price: Order price
         """
-        self._save_order_state(symbol, order_id, side, quantity, position)
-        logger.info(f"Saved order state: {side} {quantity} {symbol} (ID: {order_id}), position: {position}")
+        self._save_order_state(symbol, order_id, side, quantity, position, price)
+        logger.info(f"Saved order state: {side} {quantity} {symbol} @ {price} (ID: {order_id}), position: {position}")
     
     def get_order_state(self) -> dict:
         """
