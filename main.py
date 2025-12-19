@@ -127,6 +127,28 @@ def run(args):
     momentum = (
         ((recent_avg - earlier_avg) / earlier_avg * 100) if earlier_avg > 0 else 0
     )
+    
+    # Calculate impulse (momentum acceleration)
+    if len(df_display) >= 50:
+        # Current momentum (already calculated above)
+        # Previous momentum (20 bars ago)
+        prev_recent = df_display.iloc[-30:-20]["Close"].mean()
+        prev_earlier = df_display.iloc[-50:-30]["Close"].mean()
+        prev_momentum = ((prev_recent - prev_earlier) / prev_earlier * 100) if prev_earlier > 0 else 0
+        
+        # Impulse = change in momentum
+        impulse = momentum - prev_momentum
+        
+        # Volume confirmation factor
+        recent_volume_impulse = df_display.iloc[-1]["Volume"]
+        avg_volume_impulse = df_display.iloc[-20:]["Volume"].mean()
+        volume_factor = min(recent_volume_impulse / avg_volume_impulse if avg_volume_impulse > 0 else 1.0, 2.0)
+        
+        # Apply volume weighting
+        impulse = impulse * volume_factor
+    else:
+        impulse = 0
+    
     recent_volume = df_display.iloc[-10:]["Volume"].mean()
     avg_volume = df_display["Volume"].mean()
     volume_strength = (
@@ -156,6 +178,7 @@ def run(args):
         "current_signal": current_signal,  # For predictor
         "volatility": volatility,
         "momentum": momentum,
+        "impulse": impulse,
         "volume_strength": volume_strength,
         "atr": atr,
         "atr_pct": atr_pct,
@@ -214,40 +237,46 @@ def run(args):
         stats["funding_next"] = funding_info["next_time"]
     if funding_times and funding_rates:
         stats["funding_history"] = (funding_times, funding_rates)
-    # 生成图表 - quiet模式下使用内存，否则保存文件
-    if args.quiet:
-        logger.info("Quiet mode: generating chart in memory (no file I/O)")
-        image_bytes = plot_candlestick(
-            df_display,
-            symbol=args.symbol,
-            save_path=None,
-            ma_dict=ma_dict_display,
-            stats=stats,
-            return_bytes=True,
-        )
-        save_path = None
+    
+    # 生成图表 - 仅在使用LLM分析时需要
+    save_path = None
+    image_bytes = None
+    
+    if args.predictor == "llm":
+        # LLM需要图表进行视觉分析
+        if args.quiet:
+            logger.info("Quiet mode: generating chart in memory (no file I/O)")
+            image_bytes = plot_candlestick(
+                df_display,
+                symbol=args.symbol,
+                save_path=None,
+                ma_dict=ma_dict_display,
+                stats=stats,
+                return_bytes=True,
+            )
+        else:
+            timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+            save_path = f"charts/{args.name}_{timestamp}.png"
+            plot_candlestick(
+                df_display,
+                symbol=args.symbol,
+                save_path=save_path,
+                ma_dict=ma_dict_display,
+                stats=stats,
+                return_bytes=False,
+            )
+            logger.info(f"Chart saved: {save_path}")
     else:
-        timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-        save_path = f"charts/{args.name}_{timestamp}.png"
-        plot_candlestick(
-            df_display,
-            symbol=args.symbol,
-            save_path=save_path,
-            ma_dict=ma_dict_display,
-            stats=stats,
-            return_bytes=False,
-        )
-        logger.info(f"Chart saved: {save_path}")
-        image_bytes = None
+        logger.info("Quantitative predictor mode: skipping chart generation")
     
     # 4. Analysis - Use Predictor or AI Advisor
     result = None
     
-    if args.use_predictor:
+    if args.predictor == "quant":
         # 使用量化预测模型
         logger.info("Step 4/4: Running quantitative predictor...")
         try:
-            predictor = QuantPredictor()
+            predictor = QuantPredictor(symbol=args.symbol)
             pred_result = predictor.predict(stats)
             
             # 构建标准化输出
@@ -297,9 +326,16 @@ def run(args):
             return False
     
     # Save result to JSON
-    if result and not args.quiet and save_path:
-        result_json_path = save_path.replace('.png', '.json')
+    if result and not args.quiet:
         import json
+        if save_path:
+            # 如果有图表路径，保存在图表旁边
+            result_json_path = save_path.replace('.png', '.json')
+        else:
+            # 量化预测器模式，单独保存JSON
+            timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+            result_json_path = f"charts/{args.name}_{timestamp}.json"
+        
         with open(result_json_path, 'w', encoding='utf-8') as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
         logger.info(f"Result saved: {result_json_path}")
@@ -344,10 +380,12 @@ def parse_arguments():
     )
     # Analysis method selection
     parser.add_argument(
-        "--use-predictor",
+        "--predictor",
         "-p",
-        action="store_true",
-        help="Use quantitative predictor instead of AI advisor (default: use AI advisor)",
+        type=str,
+        default="llm",
+        choices=["llm", "quant"],
+        help="Analysis method: 'llm' for AI advisor (default), 'quant' for quantitative predictor",
     )
     # AI service configuration
     parser.add_argument(
