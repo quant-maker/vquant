@@ -312,30 +312,72 @@ Return only JSON, no other content."""
             }
 
     def _call_deepseek_api(
-        self, image_path: str = None, image_bytes: bytes = None
+        self, image_path: str = None, image_bytes: bytes = None, stats: dict = None
     ) -> Dict[str, Any]:
-        """Call DeepSeek API (if vision is supported)"""
-        base64_image = self._encode_image(image_path, image_bytes)
+        """Call DeepSeek API (text-only, vision not supported yet)"""
+        logger.warning("DeepSeek doesn't support vision models yet, using text-only analysis")
+
+        # Build technical indicators text with data tables
+        indicators_text = ""
+        if stats:
+            current_price = stats.get('current_price', 0)
+            indicators_text = "\n\n=== Market Data ==="
+            
+            # Recent K-line table (no index)
+            recent_klines = stats.get('recent_klines', [])
+            if recent_klines:
+                indicators_text += "\n\n--- Recent 24 Candlesticks ---"
+                indicators_text += "\nTime         | Open    | High    | Low     | Close"
+                indicators_text += "\n-------------|---------|---------|---------|--------"
+                for kline in recent_klines[-24:]:
+                    if 'timestamp' in kline:
+                        import pandas as pd
+                        ts = pd.Timestamp(kline['timestamp'])
+                        time_str = ts.strftime('%Y%m%d %H:%M')
+                    else:
+                        time_str = 'N/A'
+                    indicators_text += f"\n{time_str:12s} | {kline['Open']:7.4f} | {kline['High']:7.4f} | {kline['Low']:7.4f} | {kline['Close']:7.4f}"
+            
+            # Simplified Summary
+            indicators_text += "\n\n--- Summary ---"
+            indicators_text += f"\nCurrent Price: ${current_price:.4f}"
+            
+            # Add MA7, MA25, MA99 current values
+            ma_dict = stats.get('ma_dict', {})
+            if 7 in ma_dict:
+                indicators_text += f"\nMA7: {ma_dict[7]:.4f}"
+            if 25 in ma_dict:
+                indicators_text += f"\nMA25: {ma_dict[25]:.4f}"
+            if 99 in ma_dict:
+                indicators_text += f"\nMA99: {ma_dict[99]:.4f}"
+            
+            indicators_text += f"\nATR: {stats.get('atr', 0):.4f} ({stats.get('atr_pct', 0):.2f}%)"
+            
+            # MA7 Inflection
+            ma7_inflection = stats.get('ma7_inflection')
+            if ma7_inflection:
+                if ma7_inflection == "upward":
+                    indicators_text += "\nMA7 Inflection: UPWARD (Bullish signal)"
+                elif ma7_inflection == "downward":
+                    indicators_text += "\nMA7 Inflection: DOWNWARD (Bearish signal)"
+                else:
+                    indicators_text += "\nMA7 Inflection: No change (Continuing)"
+            
+            indicators_text += "\n========================\n"
+            indicators_text += "\nAnalyze the tables to identify trend, MA crossovers, and trade direction.\n"
 
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",
         }
 
+        prompt = self._build_analysis_prompt() + indicators_text
         payload = {
             "model": self.model,
             "messages": [
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "text", "text": self._build_analysis_prompt()},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{base64_image}"
-                            },
-                        },
-                    ],
+                    "content": prompt
                 }
             ],
             "max_tokens": 1000,
@@ -348,6 +390,11 @@ Return only JSON, no other content."""
             json=payload,
             timeout=60,
         )
+        
+        if response.status_code != 200:
+            error_detail = response.text
+            logger.error(f"DeepSeek API error response: {error_detail}")
+        
         response.raise_for_status()
 
         result = response.json()
@@ -375,6 +422,7 @@ Return only JSON, no other content."""
         symbol: str = None,
         interval: str = None,
         current_price: float = None,
+        stats: dict = None,
     ) -> Dict[str, Any]:
         """
         Analyze chart and provide position recommendation
@@ -385,6 +433,7 @@ Return only JSON, no other content."""
             symbol: Trading pair symbol (e.g., BTCUSDT)
             interval: Time interval (e.g., 1h, 4h, 1d)
             current_price: Current market price
+            stats: Technical indicators and market stats (for text-only models)
 
         Returns:
             Dictionary containing position recommendation and analysis results
@@ -406,7 +455,7 @@ Return only JSON, no other content."""
         elif self.service == "qwen":
             result = self._call_qwen_api(image_path, image_bytes)
         elif self.service == "deepseek":
-            result = self._call_deepseek_api(image_path, image_bytes)
+            result = self._call_deepseek_api(image_path, image_bytes, stats)
         else:
             raise ValueError(f"Unsupported service: {self.service}")
 
