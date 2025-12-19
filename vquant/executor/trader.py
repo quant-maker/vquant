@@ -56,6 +56,7 @@ class Trader:
             volume = target_pos - curpos # volume to trade
         else:
             volume = advisor['volume']  # direct volume to trade
+            volume = volume if advisor['action'] == 'buy' else -volume
         # is_open = (curpos == 0) or (curpos * volume > 0)
         quantity = round_it(abs(volume), lot_round_at(symbol))
         if float(quantity) == 0:
