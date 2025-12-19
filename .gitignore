@@ -4,6 +4,7 @@
 *.swap
 *.so
 *.log
+*.json
 .env
 
 # folders
