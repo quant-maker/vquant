@@ -82,7 +82,7 @@ class Trader:
             logger.info(f"Order placed successfully: OrderID={order_id}")
             logger.debug(f"Order details: {result}")
             # Save order state with current position (before this order)
-            self.pm.save_new_order(symbol, order_id, side, float(quantity), curpos)
+            self.pm.save_new_order(symbol, order_id, side, float(quantity), curpos, price)
             return result
         except Exception as e:
             logger.exception(f"Order failed: {e}", exc_info=True)
