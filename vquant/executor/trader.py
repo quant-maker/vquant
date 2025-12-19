@@ -44,15 +44,18 @@ class Trader:
             advisor: AI analysis result dict, must contain symbol, position, price
         """
         symbol = advisor['symbol']
-        target = advisor['position']
         fprice = advisor['current_price']
         price = round_it(fprice, round_at(symbol))
         # Step 1: Get current position (will check and handle previous order automatically)
         curpos = self.pm.get_current_position()
-        # Step 2: Calculate target volume
-        # target = args.volume if target > args.threshold else -args.volume if target < -args.threshold else 0
-        target_pos = (args.volume * target)  # target is weighted position ratio [-1, 1]
-        volume = target_pos - curpos # volume to trade
+        if 'position' in advisor:
+            target = advisor['position']  # target position ratio [-1, 1]
+            # Step 2: Calculate target volume
+            # target = args.volume if target > args.threshold else -args.volume if target < -args.threshold else 0
+            target_pos = (args.volume * target)  # target is weighted position ratio [-1, 1]
+            volume = target_pos - curpos # volume to trade
+        else:
+            volume = advisor['volume']  # direct volume to trade
         # is_open = (curpos == 0) or (curpos * volume > 0)
         quantity = round_it(abs(volume), lot_round_at(symbol))
         if float(quantity) == 0:

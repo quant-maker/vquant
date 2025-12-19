@@ -33,32 +33,65 @@ class WaveTrader:
     def __init__(
         self,
         symbol: str = "BTCUSDC",
-        buy_threshold: float = -0.5,  # Buy when price drops 0.5%
-        sell_threshold: float = 0.5,   # Sell when price rises 0.5%
-        min_trade_interval: int = 300,  # Minimum 5 minutes between trades (seconds)
-        max_position: float = 1.0,      # Maximum position size
-        state_file: str = "data/wave_state.json"
+        name: str = "default",
+        config_dir: str = "config"
     ):
         """
         Initialize wave trader
         
         Args:
             symbol: Trading pair symbol
-            buy_threshold: Price drop percentage to trigger buy (negative value)
-            sell_threshold: Price rise percentage to trigger sell (positive value)
-            min_trade_interval: Minimum seconds between trades
-            max_position: Maximum position size
-            state_file: File path to store trading state
+            name: Strategy name (used for state file naming)
+            config_dir: Directory containing config files
         """
         self.symbol = symbol
-        self.buy_threshold = buy_threshold
-        self.sell_threshold = sell_threshold
-        self.min_trade_interval = min_trade_interval
-        self.max_position = max_position
-        self.state_file = Path(state_file)
+        self.name = name
         
+        # Load configuration from file
+        config = self._load_config(self.name, self.symbol, config_dir)
+
+        self.buy_threshold = config.get('buy_threshold', -0.5)
+        self.sell_threshold = config.get('sell_threshold', 0.5)
+        self.min_trade_interval = config.get('min_trade_interval', 300)
+        self.max_position = config.get('max_position', 1.0)
+        self.state_file = Path(f"data/wave_state_{name}.json")
+        
+        logger.info(
+            f"Wave trader initialized: buy={self.buy_threshold}%, "
+            f"sell={self.sell_threshold}%, interval={self.min_trade_interval}s"
+        )
         # Load or initialize state
         self.state = self._load_state()
+    
+    def _load_config(self, name: str, symbol: str, config_dir: str) -> Dict[str, Any]:
+        """
+        Load wave trader configuration from file
+        
+        Args:
+            symbol: Trading pair symbol
+            config_dir: Directory containing config files
+            
+        Returns:
+            Configuration dictionary
+            
+        Raises:
+            FileNotFoundError: Config file does not exist
+        """
+        config_path = Path(config_dir) / f"wave_{name}.json"
+        
+        if not config_path.exists():
+            raise FileNotFoundError(
+                f"Wave trader config file not found: {config_path}\n"
+                f"Please create config file for {symbol}"
+            )
+        
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            assert symbol == config["symbol"]
+            return config
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Config file JSON format error: {e}")
     
     def _load_state(self) -> Dict[str, Any]:
         """
@@ -81,7 +114,8 @@ class WaveTrader:
             "symbol": self.symbol,
             "last_trade_price": None,
             "last_trade_time": None,
-            "last_trade_action": None
+            "last_trade_action": None,
+            "last_trade_volume": None
         }
     
     def _save_state(self):
@@ -128,7 +162,7 @@ class WaveTrader:
             Price change percentage, or None if no last trade price
         """
         if self.state["last_trade_price"] is None:
-            return 0.0
+            return None
         
         last_price = self.state["last_trade_price"]
         change_pct = ((current_price - last_price) / last_price) * 100
@@ -147,6 +181,7 @@ class WaveTrader:
         self.state["last_trade_price"] = price
         self.state["last_trade_time"] = datetime.now().isoformat()
         self.state["last_trade_action"] = action
+        self.state["last_trade_volume"] = volume
         
         self._save_state()
         logger.info(f"Recorded trade: {action} {volume} @ {price}")
@@ -204,8 +239,6 @@ class WaveTrader:
         
         # First trade - establish initial position
         if price_change is None:
-            signal["action"] = "buy"
-            signal["volume"] = volume
             signal["reasoning"] = f"Initial entry at ${current_price:.2f}"
             self._record_trade("buy", current_price, volume, signal["reasoning"])
             return signal
@@ -240,68 +273,4 @@ class WaveTrader:
             f"Signal: {signal['action'].upper()} - {signal['reasoning']}"
         )
         
-        return signal
-    
-    def reset_state(self):
-        """Reset trading state (use with caution)"""
-        logger.warning("Resetting trading state")
-        self.state = {
-            "symbol": self.symbol,
-            "last_trade_price": None,
-            "last_trade_time": None,
-            "last_trade_action": None
-        }
-        self._save_state()
-    
-    def get_state_summary(self) -> Dict[str, Any]:
-        """
-        Get summary of current trading state
-        
-        Returns:
-            Dictionary with state summary
-        """
-        return {
-            "symbol": self.state["symbol"],
-            "last_trade": {
-                "price": self.state["last_trade_price"],
-                "time": self.state["last_trade_time"],
-                "action": self.state["last_trade_action"]
-            }
-        }
-
-
-def main():
-    """Command line usage example"""
-    import sys
-    
-    # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    if len(sys.argv) < 2:
-        print("Usage: python wave.py <current_price> [symbol] [volume]")
-        print("Example: python wave.py 88888 BTCUSDC 0.1")
-        sys.exit(1)
-    
-    current_price = float(sys.argv[1])
-    symbol = sys.argv[2] if len(sys.argv) > 2 else "BTCUSDC"
-    volume = float(sys.argv[3]) if len(sys.argv) > 3 else 0.1
-    
-    # Create trader
-    trader = WaveTrader(symbol=symbol)
-    
-    # Generate signal
-    signal = trader.generate_signal(current_price, volume)
-    
-    # Print result
-    print(json.dumps(signal, indent=2))
-    
-    # Print state summary
-    print("\nCurrent State:")
-    print(json.dumps(trader.get_state_summary(), indent=2))
-
-
-if __name__ == "__main__":
-    main()
+        return signal 
