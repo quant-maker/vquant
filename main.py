@@ -279,36 +279,17 @@ def run(args):
         try:
             trader = WaveTrader(
                 symbol=args.symbol,
-                buy_threshold=args.wave_buy_threshold,
-                sell_threshold=args.wave_sell_threshold,
-                min_trade_interval=args.wave_interval,
-                max_position=args.volume if args.volume > 0 else 1.0,
-                state_file=f"data/wave_state_{args.name}.json"
+                name=args.name,
+                config_dir="config"
             )
             
             # Generate trading signal
-            signal = trader.generate_signal(
+            result = trader.generate_signal(
                 current_price=current_price,
                 volume=args.volume if args.volume > 0 else 0.1,
-                stats=stats
-            )
-            
-            # Convert signal to standard result format
-            result = {
-                'symbol': args.symbol,
-                'position': 1.0 if signal['action'] == 'buy' else (-1.0 if signal['action'] == 'sell' else 0.0),
-                'confidence': 'high' if signal['action'] != 'hold' else 'low',
-                'current_price': current_price,
-                'reasoning': signal['reasoning'],
-                'analysis_type': 'wave',
-                'trade_action': signal['action'],
-                'trade_volume': signal['volume'],
-                'price_change': signal.get('price_change'),
-                'state_summary': trader.get_state_summary()
-            }
-            
-            logger.info(f"Wave signal: {signal['action'].upper()} - {signal['reasoning']}")
-            
+                stats=stats)
+            if result:
+                logger.info(f"Wave signal: {result['action'].upper()} - {result['volume']}")
         except Exception as e:
             logger.exception(f"Wave trading failed: {e}", exc_info=True)
             return False
@@ -486,25 +467,6 @@ def parse_arguments():
         nargs="+",
         default=[7, 25, 99],
         help="Moving average periods (default: 7 25 99)",
-    )
-    # Wave trader parameters
-    parser.add_argument(
-        "--wave-buy-threshold",
-        type=float,
-        default=-0.5,
-        help="Wave trader: price drop percentage to trigger buy (default: -0.5)",
-    )
-    parser.add_argument(
-        "--wave-sell-threshold",
-        type=float,
-        default=0.5,
-        help="Wave trader: price rise percentage to trigger sell (default: 0.5)",
-    )
-    parser.add_argument(
-        "--wave-interval",
-        type=int,
-        default=300,
-        help="Wave trader: minimum seconds between trades (default: 300)",
     )
     # Logging configuration
     parser.add_argument(
