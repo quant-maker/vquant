@@ -19,6 +19,7 @@ from vquant.model.vision import (
 )
 from vquant.analysis.advisor import PositionAdvisor
 from vquant.analysis.predictor import QuantPredictor
+from vquant.analysis.wave import WaveTrader
 
 
 # 配置日志
@@ -269,10 +270,50 @@ def run(args):
     else:
         logger.info("Quantitative predictor mode: skipping chart generation")
     
-    # 4. Analysis - Use Predictor or AI Advisor
+    # 4. Analysis - Use Predictor, Wave Trader, or AI Advisor
     result = None
     
-    if args.predictor == "quant":
+    if args.predictor == "wave":
+        # Use wave trading strategy
+        logger.info("Step 4/4: Running wave trader...")
+        try:
+            trader = WaveTrader(
+                symbol=args.symbol,
+                buy_threshold=args.wave_buy_threshold,
+                sell_threshold=args.wave_sell_threshold,
+                min_trade_interval=args.wave_interval,
+                max_position=args.volume if args.volume > 0 else 1.0,
+                state_file=f"data/wave_state_{args.name}.json"
+            )
+            
+            # Generate trading signal
+            signal = trader.generate_signal(
+                current_price=current_price,
+                volume=args.volume if args.volume > 0 else 0.1,
+                stats=stats
+            )
+            
+            # Convert signal to standard result format
+            result = {
+                'symbol': args.symbol,
+                'position': 1.0 if signal['action'] == 'buy' else (-1.0 if signal['action'] == 'sell' else 0.0),
+                'confidence': 'high' if signal['action'] != 'hold' else 'low',
+                'current_price': current_price,
+                'reasoning': signal['reasoning'],
+                'analysis_type': 'wave',
+                'trade_action': signal['action'],
+                'trade_volume': signal['volume'],
+                'price_change': signal.get('price_change'),
+                'state_summary': trader.get_state_summary()
+            }
+            
+            logger.info(f"Wave signal: {signal['action'].upper()} - {signal['reasoning']}")
+            
+        except Exception as e:
+            logger.exception(f"Wave trading failed: {e}", exc_info=True)
+            return False
+    
+    elif args.predictor == "quant":
         # 使用量化预测模型
         logger.info("Step 4/4: Running quantitative predictor...")
         try:
@@ -384,8 +425,8 @@ def parse_arguments():
         "-p",
         type=str,
         default="llm",
-        choices=["llm", "quant"],
-        help="Analysis method: 'llm' for AI advisor (default), 'quant' for quantitative predictor",
+        choices=["llm", "quant", "wave"],
+        help="Analysis method: 'llm' for AI advisor (default), 'quant' for quantitative predictor, 'wave' for wave trader",
     )
     # AI service configuration
     parser.add_argument(
@@ -445,6 +486,25 @@ def parse_arguments():
         nargs="+",
         default=[7, 25, 99],
         help="Moving average periods (default: 7 25 99)",
+    )
+    # Wave trader parameters
+    parser.add_argument(
+        "--wave-buy-threshold",
+        type=float,
+        default=-0.5,
+        help="Wave trader: price drop percentage to trigger buy (default: -0.5)",
+    )
+    parser.add_argument(
+        "--wave-sell-threshold",
+        type=float,
+        default=0.5,
+        help="Wave trader: price rise percentage to trigger sell (default: 0.5)",
+    )
+    parser.add_argument(
+        "--wave-interval",
+        type=int,
+        default=300,
+        help="Wave trader: minimum seconds between trades (default: 300)",
     )
     # Logging configuration
     parser.add_argument(
