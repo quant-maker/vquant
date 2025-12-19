@@ -1,0 +1,59 @@
+{
+  "symbol": "BTCUSDC",
+  "updated_at": "2025-12-19T17:37:39.286270",
+  "thresholds": {
+    "ma_deviation": {
+      "extreme_bullish": 0.9500562422758037,
+      "strong_bullish": 0.6402954001110833,
+      "bullish": 0.28807975194418356,
+      "neutral_high": 0,
+      "neutral_low": -0.2644671693067643,
+      "bearish": -0.6775075320380599,
+      "strong_bearish": -1.0606840843461194
+    },
+    "momentum": {
+      "extreme_bullish": 2.317688705921857,
+      "strong_bullish": 1.6298556832654112,
+      "bullish": 0.7531551070251803,
+      "neutral_high": 0,
+      "neutral_low": -0.7326755595899523,
+      "bearish": -1.6871046175923585,
+      "strong_bearish": -2.4592491955007887
+    },
+    "impulse": {
+      "extreme_bullish": 3.059426532266565,
+      "strong_bullish": 2.02704946677628,
+      "bullish": 0.8125017485097485,
+      "neutral_high": 0,
+      "neutral_low": -0.8516148011510499,
+      "bearish": -2.180841154499227,
+      "strong_bearish": -3.2465975390765562
+    },
+    "rsi": {
+      "extreme_overbought": 77.66719870720169,
+      "overbought": 72.77848469565212,
+      "slightly_overbought": 62.59677211321774,
+      "neutral_high": 50.44882699994314,
+      "neutral_low": 38.3175574341428,
+      "slightly_oversold": 28.755157422404146,
+      "oversold": 22.94486421554615
+    },
+    "macd_diff": {
+      "extreme_bullish": 0.26026323295383536,
+      "strong_bullish": 0.18142340397292084,
+      "bullish": 0.08212972581051228,
+      "neutral_high": 0,
+      "neutral_low": -0.08447891246057729,
+      "bearish": -0.18272963551201712,
+      "strong_bearish": -0.25846140252413785
+    },
+    "volume_change": {
+      "extreme_volume": 189.55934205225995,
+      "high_volume": 114.2266303671427,
+      "above_average": 30.843152198128507,
+      "neutral": -21.49346873860572,
+      "below_average": -50.13703628714264,
+      "low_volume": -64.88199451665356
+    }
+  }
+}

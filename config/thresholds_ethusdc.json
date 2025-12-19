@@ -1,0 +1,59 @@
+{
+  "symbol": "ETHUSDC",
+  "updated_at": "2025-12-19T17:39:34.972337",
+  "thresholds": {
+    "ma_deviation": {
+      "extreme_bullish": 1.577121565657455,
+      "strong_bullish": 1.0756541889809286,
+      "bullish": 0.5016308837490716,
+      "neutral_high": 0,
+      "neutral_low": -0.4550174985127746,
+      "bearish": -1.1243782031799823,
+      "strong_bearish": -1.7519869778656971
+    },
+    "momentum": {
+      "extreme_bullish": 3.871861528742754,
+      "strong_bullish": 2.826898924183864,
+      "bullish": 1.255702880041178,
+      "neutral_high": 0,
+      "neutral_low": -1.2025429567871684,
+      "bearish": -2.9545359922079055,
+      "strong_bearish": -4.077160634048883
+    },
+    "impulse": {
+      "extreme_bullish": 5.191054973881732,
+      "strong_bullish": 3.5637166858519183,
+      "bullish": 1.4878994786027566,
+      "neutral_high": 0,
+      "neutral_low": -1.5437665307222896,
+      "bearish": -3.6700245781542793,
+      "strong_bearish": -5.319212751443259
+    },
+    "rsi": {
+      "extreme_overbought": 79.2105448115554,
+      "overbought": 73.79028163963629,
+      "slightly_overbought": 63.02770340198428,
+      "neutral_high": 50.53334007380823,
+      "neutral_low": 38.457062985516025,
+      "slightly_oversold": 28.149448780443947,
+      "oversold": 22.562606352929887
+    },
+    "macd_diff": {
+      "extreme_bullish": 0.42301369276123596,
+      "strong_bullish": 0.3049784185416263,
+      "bullish": 0.15001262465579213,
+      "neutral_high": 0,
+      "neutral_low": -0.14368303001442312,
+      "bearish": -0.32006642209894526,
+      "strong_bearish": -0.44323477164799324
+    },
+    "volume_change": {
+      "extreme_volume": 175.63106940576986,
+      "high_volume": 105.75717987757587,
+      "above_average": 28.722398662686004,
+      "neutral": -19.66615908204642,
+      "below_average": -48.41068878801278,
+      "low_volume": -64.0534649338103
+    }
+  }
+}
