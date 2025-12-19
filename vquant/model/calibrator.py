@@ -378,13 +378,13 @@ def save_thresholds(thresholds, symbol, output_dir='config'):
 
 def main():
     parser = argparse.ArgumentParser(description='Calibrate technical indicator thresholds')
-    parser.add_argument('--symbol', type=str, default='BTCUSDC',
+    parser.add_argument('--symbol', '-s', type=str, default='BTCUSDC',
                         help='Trading pair symbol (default: BTCUSDC)')
-    parser.add_argument('--days', type=int, default=365,
+    parser.add_argument('--days', '-d', type=int, default=365,
                         help='Number of days to analyze (default: 365)')
-    parser.add_argument('--interval', type=str, default='1h',
+    parser.add_argument('--interval', '-i', type=str, default='1h',
                         help='K-line period (default: 1h)')
-    parser.add_argument('--output', type=str, default='config',
+    parser.add_argument('--output', '-o', type=str, default='config',
                         help='Output directory (default: config)')
     
     args = parser.parse_args()
