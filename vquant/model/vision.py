@@ -373,6 +373,8 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
         plt.savefig(buf, format='png', dpi=100, bbox_inches='tight', pad_inches=0)
         buf.seek(0)
         image_bytes = buf.read()
+        file_size = len(image_bytes) / 1024  # KB
+        tokens = file_size / 0.75  # Rough estimate: 1 token ≈ 0.75 KB
         plt.close()
         buf.close()
         logger.debug(f"Chart generated in memory: ~{file_size:.1f} KB, ~{tokens:.0f} tokens")

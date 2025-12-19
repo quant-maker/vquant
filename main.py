@@ -9,7 +9,7 @@ import argparse
 import pandas as pd
 
 from dotenv import load_dotenv
-from vquant.vision.chart import (
+from vquant.model.vision import (
     fetch_binance_klines,
     fetch_funding_rate,
     fetch_funding_rate_history,
@@ -18,6 +18,7 @@ from vquant.vision.chart import (
     calculate_macd,
 )
 from vquant.analysis.advisor import PositionAdvisor
+from vquant.analysis.predictor import QuantPredictor
 
 
 # 配置日志
@@ -148,8 +149,11 @@ def run(args):
         "total_trades": total_trades,
         "buy_ratio": buy_ratio,
         "rsi": current_rsi,
+        "current_rsi": current_rsi,  # For predictor
         "macd": current_macd,
+        "current_macd": current_macd,  # For predictor
         "macd_signal": current_signal,
+        "current_signal": current_signal,  # For predictor
         "volatility": volatility,
         "momentum": momentum,
         "volume_strength": volume_strength,
@@ -174,6 +178,14 @@ def run(args):
             for period, ma_series in ma_dict.items()
         },
     }
+    
+    # 添加当前MA值供predictor使用
+    if 7 in ma_dict:
+        stats["current_ma7"] = ma_dict[7].iloc[-1]
+    if 25 in ma_dict:
+        stats["current_ma25"] = ma_dict[25].iloc[-1]
+    if 99 in ma_dict:
+        stats["current_ma99"] = ma_dict[99].iloc[-1]
     # 计算MA7拐点（检测最近4根K线内的拐点）
     if 7 in ma_dict and len(ma_dict[7]) >= 5:
         ma7_series = ma_dict[7]
@@ -227,45 +239,86 @@ def run(args):
         )
         logger.info(f"Chart saved: {save_path}")
         image_bytes = None
-    # 4. AI analysis
-    logger.info(
-        f"Step 4/4: Performing AI analysis with {args.service}::{args.model}..."
-    )
-    try:
-        advisor = PositionAdvisor(service=args.service, model=args.model)
-        result = advisor.analyze(
-            image_path=save_path,
-            image_bytes=image_bytes,
-            symbol=args.symbol,
-            interval=args.interval,
-            current_price=current_price,
-            stats=stats,
-        )
-        # Execute trade if enabled
-        trader = None
-        if args.trade and result:
-            logger.info("Executing trade...")
-            try:
-                from vquant.executor.trader import Trader
-
-                trader = Trader(name=args.name, account=args.account)
-                trader.trade(result, args)
-                logger.info("Trade execution completed")
-            except Exception as trade_error:
-                logger.exception(
-                    f"Trade execution failed: {trade_error}", exc_info=True
-                )
-        return True
-    except Exception as e:
-        logger.error(f"AI analysis failed: {e}", exc_info=True)
+    
+    # 4. Analysis - Use Predictor or AI Advisor
+    result = None
+    
+    if args.use_predictor:
+        # 使用量化预测模型
+        logger.info("Step 4/4: Running quantitative predictor...")
+        try:
+            predictor = QuantPredictor()
+            pred_result = predictor.predict(stats)
+            
+            # 构建标准化输出
+            result = {
+                'symbol': args.symbol,
+                'position': pred_result['position'],
+                'confidence': pred_result['confidence'],
+                'current_price': current_price,
+                'score': pred_result.get('score'),
+                'factors': pred_result.get('factors'),
+                'reasoning': pred_result['reasoning'],
+                'analysis_type': 'predictor',
+            }
+            
+            logger.info(f"Prediction result: position={result['position']}, confidence={result['confidence']}")
+            logger.info(f"Reasoning: {result['reasoning']}")
+            
+        except Exception as e:
+            logger.exception(f"Quantitative prediction failed: {e}", exc_info=True)
+            return False
+    else:
+        # 使用AI Advisor（原有逻辑）
         logger.info(
-            "Tip: Please ensure you have set the correct API key environment variables"
+            f"Step 4/4: Performing AI analysis with {args.service}::{args.model}..."
         )
-        logger.info("  - GitHub Copilot: GITHUB_TOKEN")
-        logger.info("  - OpenAI: OPENAI_API_KEY")
-        logger.info("  - Qwen: DASHSCOPE_API_KEY")
-        logger.info("  - DeepSeek: DEEPSEEK_API_KEY")
-        return {"chart_path": save_path, "stats": stats, "analysis": None}
+        try:
+            advisor = PositionAdvisor(service=args.service, model=args.model)
+            result = advisor.analyze(
+                image_path=save_path,
+                image_bytes=image_bytes,
+                symbol=args.symbol,
+                interval=args.interval,
+                current_price=current_price,
+                stats=stats,
+            )
+            result['analysis_type'] = 'advisor'
+            
+        except Exception as e:
+            logger.error(f"AI analysis failed: {e}", exc_info=True)
+            logger.info(
+                "Tip: Please ensure you have set the correct API key environment variables"
+            )
+            logger.info("  - GitHub Copilot: GITHUB_TOKEN")
+            logger.info("  - OpenAI: OPENAI_API_KEY")
+            logger.info("  - Qwen: DASHSCOPE_API_KEY")
+            logger.info("  - DeepSeek: DEEPSEEK_API_KEY")
+            return False
+    
+    # Save result to JSON
+    if result and not args.quiet and save_path:
+        result_json_path = save_path.replace('.png', '.json')
+        import json
+        with open(result_json_path, 'w', encoding='utf-8') as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+        logger.info(f"Result saved: {result_json_path}")
+    
+    # Execute trade if enabled
+    trader = None
+    if args.trade and result:
+        logger.info("Executing trade...")
+        try:
+            from vquant.executor.trader import Trader
+
+            trader = Trader(name=args.name, account=args.account)
+            trader.trade(result, args)
+            logger.info("Trade execution completed")
+        except Exception as trade_error:
+            logger.exception(
+                f"Trade execution failed: {trade_error}", exc_info=True
+            )
+    return True
 
 
 def parse_arguments():
@@ -289,6 +342,13 @@ def parse_arguments():
         choices=["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"],
         help="K-line period (default: 1h)",
     )
+    # Analysis method selection
+    parser.add_argument(
+        "--use-predictor",
+        "-p",
+        action="store_true",
+        help="Use quantitative predictor instead of AI advisor (default: use AI advisor)",
+    )
     # AI service configuration
     parser.add_argument(
         "--service",
@@ -296,7 +356,7 @@ def parse_arguments():
         type=str,
         default="qwen",
         choices=["copilot", "openai", "qwen", "deepseek"],
-        help="AI service provider (default: copilot)",
+        help="AI service provider (default: qwen, ignored if --use-predictor is set)",
     )
     parser.add_argument(
         "--model",
