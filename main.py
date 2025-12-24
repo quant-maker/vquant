@@ -13,12 +13,11 @@ from vquant.model.vision import (
     fetch_binance_klines,
     fetch_funding_rate,
     fetch_funding_rate_history,
-    plot_candlestick,
     calculate_rsi,
     calculate_macd,
 )
 from vquant.analysis.advisor import PositionAdvisor
-from vquant.analysis.predictor import QuantPredictor
+from vquant.analysis.quant import QuantPredictor
 from vquant.analysis.wave import WaveTrader
 
 
@@ -239,122 +238,45 @@ def run(args):
     if funding_times and funding_rates:
         stats["funding_history"] = (funding_times, funding_rates)
     
-    # 生成图表 - 仅在使用LLM分析时需要
-    save_path = None
-    image_bytes = None
+    # 4. Analysis - Use unified predictor interface
+    logger.info(f"Step 4/4: Running {args.predictor} analysis...")
     
-    if args.predictor == "llm":
-        # LLM需要图表进行视觉分析
-        if args.quiet:
-            logger.info("Quiet mode: generating chart in memory (no file I/O)")
-            image_bytes = plot_candlestick(
-                df_display,
-                symbol=args.symbol,
-                save_path=None,
-                ma_dict=ma_dict_display,
-                stats=stats,
-                return_bytes=True,
-            )
-        else:
-            timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-            save_path = f"charts/{args.name}_{timestamp}.png"
-            plot_candlestick(
-                df_display,
-                symbol=args.symbol,
-                save_path=save_path,
-                ma_dict=ma_dict_display,
-                stats=stats,
-                return_bytes=False,
-            )
-            logger.info(f"Chart saved: {save_path}")
-    else:
-        logger.info("Quantitative predictor mode: skipping chart generation")
-    
-    # 4. Analysis - Use Predictor, Wave Trader, or AI Advisor
-    result = None
-    
-    if args.predictor == "wave":
-        # Use wave trading strategy
-        logger.info("Step 4/4: Running wave trader...")
-        try:
-            trader = WaveTrader(
-                symbol=args.symbol,
-                name=args.name,
-                config_dir="config"
-            )
-            
-            # Generate trading signal
-            result = trader.generate_signal(
-                current_price=current_price,
-                volume=args.volume if args.volume > 0 else 0.1,
-                stats=stats)
-            if result:
-                logger.info(f"Wave signal: {result['action'].upper()} - {result['volume']}")
-        except Exception as e:
-            logger.exception(f"Wave trading failed: {e}", exc_info=True)
-            return False
-    
-    elif args.predictor == "quant":
-        # 使用量化预测模型
-        logger.info("Step 4/4: Running quantitative predictor...")
-        try:
-            predictor = QuantPredictor(symbol=args.symbol)
-            pred_result = predictor.predict(stats)
-            
-            # 构建标准化输出
-            result = {
-                'symbol': args.symbol,
-                'position': pred_result['position'],
-                'confidence': pred_result['confidence'],
-                'current_price': current_price,
-                'score': pred_result.get('score'),
-                'factors': pred_result.get('factors'),
-                'reasoning': pred_result['reasoning'],
-                'analysis_type': 'predictor',
-            }
-            
-            logger.info(f"Prediction result: position={result['position']}, confidence={result['confidence']}")
-            logger.info(f"Reasoning: {result['reasoning']}")
-            
-        except Exception as e:
-            logger.exception(f"Quantitative prediction failed: {e}", exc_info=True)
-            return False
-    else:
-        # 使用AI Advisor（原有逻辑）
-        logger.info(
-            f"Step 4/4: Performing AI analysis with {args.service}::{args.model}..."
+    try:
+        # Create appropriate predictor instance
+        predictor = _create_predictor(args)
+        
+        # Run analysis using unified interface
+        result, save_path = predictor.run(
+            df=df,
+            df_display=df_display,
+            ma_dict=ma_dict,
+            ma_dict_display=ma_dict_display,
+            stats=stats,
+            args=args
         )
-        try:
-            advisor = PositionAdvisor(service=args.service, model=args.model)
-            result = advisor.analyze(
-                image_path=save_path,
-                image_bytes=image_bytes,
-                symbol=args.symbol,
-                interval=args.interval,
-                current_price=current_price,
-                stats=stats,
-            )
-            result['analysis_type'] = 'advisor'
-            
-        except Exception as e:
-            logger.error(f"AI analysis failed: {e}", exc_info=True)
-            logger.info(
-                "Tip: Please ensure you have set the correct API key environment variables"
-            )
+        
+        # Log result
+        logger.info(f"Analysis result: position={result.get('position')}, confidence={result.get('confidence')}")
+        logger.info(f"Reasoning: {result.get('reasoning', 'N/A')}")
+        
+    except Exception as e:
+        logger.exception(f"Analysis failed: {e}", exc_info=True)
+        if args.predictor == "llm":
+            logger.info("Tip: Please ensure you have set the correct API key environment variables")
             logger.info("  - GitHub Copilot: GITHUB_TOKEN")
             logger.info("  - OpenAI: OPENAI_API_KEY")
             logger.info("  - Qwen: DASHSCOPE_API_KEY")
             logger.info("  - DeepSeek: DEEPSEEK_API_KEY")
-            return False
+        return False
     
     # Save result to JSON
     if result and not args.quiet:
         import json
         if save_path:
-            # 如果有图表路径，保存在图表旁边
+            # If chart path exists, save JSON next to it
             result_json_path = save_path.replace('.png', '.json')
         else:
-            # 量化预测器模式，单独保存JSON
+            # No chart path, save JSON independently
             timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
             result_json_path = f"charts/{args.name}_{timestamp}.json"
         
@@ -377,6 +299,29 @@ def run(args):
                 f"Trade execution failed: {trade_error}", exc_info=True
             )
     return True
+
+
+def _create_predictor(args):
+    """Create appropriate predictor instance based on args"""
+    if args.predictor == "wave":
+        return WaveTrader(
+            symbol=args.symbol,
+            name=args.name,
+            config_dir="config"
+        )
+    elif args.predictor == "quant":
+        return QuantPredictor(
+            symbol=args.symbol,
+            name=args.name,
+            config_dir="config"
+        )
+    else:  # llm
+        return PositionAdvisor(
+            symbol=args.symbol,
+            name=args.name,
+            service=args.service,
+            model=args.model
+        )
 
 
 def parse_arguments():

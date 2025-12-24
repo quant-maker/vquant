@@ -7,15 +7,19 @@ import json
 import base64
 import logging
 import requests
+import pandas as pd
 
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
+
+from .base import BasePredictor
+from vquant.model.vision import plot_candlestick
 
 
 logger = logging.getLogger(__name__)
 
 
-class PositionAdvisor:
+class PositionAdvisor(BasePredictor):
     """
     Position Advisor - Analyze K-line chart and provide position recommendations between -1 and 1
 
@@ -27,15 +31,18 @@ class PositionAdvisor:
      1.0: Full long position
     """
 
-    def __init__(self, service="copilot", api_key=None, base_url=None, model=None):
+    def __init__(self, symbol: str = "BTCUSDC", name: str = "default", service="copilot", api_key=None, base_url=None, model=None):
         """
         Initialize position advisor
         Args:
+            symbol: Trading symbol
+            name: Strategy name
             service: AI service type ('copilot', 'openai', 'qwen', 'deepseek')
             api_key: API key, if not provided will read from environment variable
             base_url: API base URL (optional)
             model: Model name (Copilot options: gpt-4o, claude-3.5-sonnet, o1, etc.)
         """
+        super().__init__(symbol, name)
         self.service = service.lower()
         self.api_key = api_key or self._get_api_key()
         self.base_url = base_url or self._get_base_url()
@@ -415,7 +422,89 @@ Return only JSON, no other content."""
                 "error": "Failed to parse JSON response",
             }
 
-    def analyze(
+    def prepare_data(self, df, df_display, ma_dict, ma_dict_display, stats, args) -> Tuple[Optional[str], Optional[bytes]]:
+        """
+        Prepare chart data for LLM analysis
+        
+        Args:
+            df: Full dataframe
+            df_display: Display dataframe
+            ma_dict: Full MA dictionary
+            ma_dict_display: Display MA dictionary
+            stats: Statistics dictionary
+            args: Command line arguments
+            
+        Returns:
+            Tuple of (save_path, image_bytes)
+        """
+        save_path = None
+        image_bytes = None
+        
+        if args.quiet:
+            logger.info("Quiet mode: generating chart in memory (no file I/O)")
+            image_bytes = plot_candlestick(
+                df_display,
+                symbol=self.symbol,
+                save_path=None,
+                ma_dict=ma_dict_display,
+                stats=stats,
+                return_bytes=True,
+            )
+        else:
+            timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+            save_path = f"charts/{self.name}_{timestamp}.png"
+            plot_candlestick(
+                df_display,
+                symbol=self.symbol,
+                save_path=save_path,
+                ma_dict=ma_dict_display,
+                stats=stats,
+                return_bytes=False,
+            )
+            logger.info(f"Chart saved: {save_path}")
+        
+        return save_path, image_bytes
+    
+    def analyze(self, stats: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        Analyze chart using LLM
+        
+        Args:
+            stats: Statistics dictionary
+            **kwargs: Additional parameters (save_path, image_bytes, args)
+            
+        Returns:
+            Analysis result from LLM
+        """
+        save_path = kwargs.get('save_path')
+        image_bytes = kwargs.get('image_bytes')
+        args = kwargs.get('args')
+        
+        return self.analyze_image(
+            image_path=save_path,
+            image_bytes=image_bytes,
+            symbol=self.symbol,
+            interval=args.interval if args else None,
+            current_price=stats.get('current_price'),
+            stats=stats,
+        )
+    
+    def generate_output(self, result: Dict[str, Any], stats: Dict[str, Any], args) -> Dict[str, Any]:
+        """
+        Generate standardized output for LLM advisor
+        
+        Args:
+            result: Analysis result from analyze()
+            stats: Statistics dictionary
+            args: Command line arguments
+            
+        Returns:
+            Standardized output dictionary
+        """
+        result['analysis_type'] = 'advisor'
+        return result
+    
+    def analyze_image(
         self,
         image_path: str = None,
         image_bytes: bytes = None,
@@ -513,10 +602,10 @@ def main():
     service = sys.argv[2] if len(sys.argv) > 2 else "copilot"
     model = sys.argv[3] if len(sys.argv) > 3 else None
     # 创建分析器
-    advisor = PositionAdvisor(service=service, model=model)
+    advisor = PositionAdvisor(symbol="BTCUSDC", service=service, model=model)
 
     # 分析图表
-    _ = advisor.analyze(image_path)
+    _ = advisor.analyze_image(image_path)
 
 
 if __name__ == "__main__":
