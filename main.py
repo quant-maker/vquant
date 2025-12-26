@@ -13,12 +13,13 @@ from vquant.model.vision import (
     fetch_binance_klines,
     fetch_funding_rate,
     fetch_funding_rate_history,
-    calculate_rsi,
-    calculate_macd,
 )
+from vquant.data.indicators import prepare_market_stats, add_funding_rate_to_stats
 from vquant.analysis.advisor import PositionAdvisor
 from vquant.analysis.quant import QuantPredictor
 from vquant.analysis.wave import WaveTrader
+from vquant.analysis.martin import MartinTrader
+from vquant.analysis.kelly import KellyTrader
 
 
 # 配置日志
@@ -75,6 +76,7 @@ def run(args):
         logger.error("Failed to fetch data")
         return None
     logger.info(f"Successfully fetched {len(df)} data points")
+    
     # 2. Fetch funding rate
     logger.info("Step 2/4: Fetching funding rate...")
     funding_info = fetch_funding_rate(symbol=args.symbol)
@@ -83,160 +85,26 @@ def run(args):
     )
     if funding_info:
         logger.info(f"Current funding rate: {funding_info['rate']:.4f}%")
+    
     # 3. Calculate indicators and generate chart
-    logger.info("Step 3/4: Calculating technical indicators and generating chart...")
-    # 计算均线
+    logger.info("Step 3/4: Calculating technical indicators...")
+    
+    # Calculate moving averages
     ma_dict = {}
     for period in args.ma_periods:
         ma_dict[period] = df["Close"].rolling(window=period).mean()
-    # 只显示最后limit条数据
+    
+    # Display data (last limit rows)
     df_display = df.iloc[-args.limit :].copy()
     ma_dict_display = {}
     for period, ma_series in ma_dict.items():
         ma_dict_display[period] = ma_series.iloc[-args.limit :]
-    # 计算统计数据
-    current_price = df_display.iloc[-1]["Close"]
-    first_price = df_display.iloc[0]["Open"]
-    price_change = current_price - first_price
-    price_change_pct = (price_change / first_price) * 100
-    high_price = df_display["High"].max()
-    low_price = df_display["Low"].min()
-    total_volume = df_display["Volume"].sum()
-    total_trades = df_display["Trades"].sum()
-    total_taker_buy = df_display["TakerBuyBase"].sum()
-    buy_ratio = (total_taker_buy / total_volume * 100) if total_volume > 0 else 0
-    # 技术指标 - 在完整数据上计算，然后截断用于显示
-    rsi_full = calculate_rsi(df["Close"])
-    macd_full, signal_full, histogram_full = calculate_macd(df["Close"])
-    current_rsi = rsi_full.iloc[-1]
-    current_macd = macd_full.iloc[-1]
-    current_signal = signal_full.iloc[-1]
-    # 截断指标数据用于绘图
-    rsi_display = rsi_full.iloc[-args.limit :]
-    macd_display = macd_full.iloc[-args.limit :]
-    signal_display = signal_full.iloc[-args.limit :]
-    histogram_display = histogram_full.iloc[-args.limit :]
-    # 市场动态指标
-    volatility = df_display["Close"].pct_change().std() * 100
-    recent_avg = df_display.iloc[-10:]["Close"].mean()
-    earlier_avg = (
-        df_display.iloc[-30:-10]["Close"].mean()
-        if len(df_display) >= 30
-        else df_display.iloc[:10]["Close"].mean()
-    )
-    momentum = (
-        ((recent_avg - earlier_avg) / earlier_avg * 100) if earlier_avg > 0 else 0
-    )
     
-    # Calculate impulse (momentum acceleration)
-    if len(df_display) >= 50:
-        # Current momentum (already calculated above)
-        # Previous momentum (20 bars ago)
-        prev_recent = df_display.iloc[-30:-20]["Close"].mean()
-        prev_earlier = df_display.iloc[-50:-30]["Close"].mean()
-        prev_momentum = ((prev_recent - prev_earlier) / prev_earlier * 100) if prev_earlier > 0 else 0
-        
-        # Impulse = change in momentum
-        impulse = momentum - prev_momentum
-        
-        # Volume confirmation factor
-        recent_volume_impulse = df_display.iloc[-1]["Volume"]
-        avg_volume_impulse = df_display.iloc[-20:]["Volume"].mean()
-        volume_factor = min(recent_volume_impulse / avg_volume_impulse if avg_volume_impulse > 0 else 1.0, 2.0)
-        
-        # Apply volume weighting
-        impulse = impulse * volume_factor
-    else:
-        impulse = 0
+    # Prepare comprehensive market statistics using shared module
+    stats = prepare_market_stats(df, df_display, ma_dict, args)
     
-    recent_volume = df_display.iloc[-10:]["Volume"].mean()
-    avg_volume = df_display["Volume"].mean()
-    volume_strength = (
-        ((recent_volume - avg_volume) / avg_volume * 100) if avg_volume > 0 else 0
-    )
-    # ATR
-    high_low = df_display["High"] - df_display["Low"]
-    high_close = abs(df_display["High"] - df_display["Close"].shift())
-    low_close = abs(df_display["Low"] - df_display["Close"].shift())
-    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-    atr = tr.rolling(window=14).mean().iloc[-1]
-    atr_pct = (atr / current_price * 100) if current_price > 0 else 0
-    stats = {
-        "current_price": current_price,
-        "price_change": price_change,
-        "price_change_pct": price_change_pct,
-        "high": high_price,
-        "low": low_price,
-        "total_volume": total_volume,
-        "total_trades": total_trades,
-        "buy_ratio": buy_ratio,
-        "rsi": current_rsi,
-        "current_rsi": current_rsi,  # For predictor
-        "macd": current_macd,
-        "current_macd": current_macd,  # For predictor
-        "macd_signal": current_signal,
-        "current_signal": current_signal,  # For predictor
-        "volatility": volatility,
-        "momentum": momentum,
-        "impulse": impulse,
-        "volume_strength": volume_strength,
-        "atr": atr,
-        "atr_pct": atr_pct,
-        # 添加完整的指标序列用于绘图
-        "rsi_series": rsi_display,
-        "macd_series": macd_display,
-        "signal_series": signal_display,
-        "histogram_series": histogram_display,
-        # 添加均线数据和拐点检测
-        "ma_dict": {
-            period: ma_series.iloc[-1] for period, ma_series in ma_dict.items()
-        },
-        "ma_periods": args.ma_periods,
-        # 添加最近的K线数据用于表格展示
-        "recent_klines": df_display.iloc[-24:]
-        .reset_index()[["timestamp", "Open", "High", "Low", "Close"]]
-        .to_dict("records"),
-        "recent_ma": {
-            period: ma_series.iloc[-24:].tolist()
-            for period, ma_series in ma_dict.items()
-        },
-    }
-    
-    # 添加当前MA值供predictor使用
-    if 7 in ma_dict:
-        stats["current_ma7"] = ma_dict[7].iloc[-1]
-    if 25 in ma_dict:
-        stats["current_ma25"] = ma_dict[25].iloc[-1]
-    if 99 in ma_dict:
-        stats["current_ma99"] = ma_dict[99].iloc[-1]
-    # 计算MA7拐点（检测最近4根K线内的拐点）
-    if 7 in ma_dict and len(ma_dict[7]) >= 5:
-        ma7_series = ma_dict[7]
-
-        # 检查最近4根K线内是否有拐点
-        inflection_found = None
-        for i in range(1, 5):  # 检查最近4根bar
-            if len(ma7_series) >= i + 2:
-                ma7_current = ma7_series.iloc[-i]
-                ma7_prev1 = ma7_series.iloc[-i - 1]
-                ma7_prev2 = ma7_series.iloc[-i - 2]
-
-                slope_recent = ma7_current - ma7_prev1
-                slope_before = ma7_prev1 - ma7_prev2
-
-                if slope_before > 0 and slope_recent < 0:
-                    inflection_found = "downward"
-                    break
-                elif slope_before < 0 and slope_recent > 0:
-                    inflection_found = "upward"
-                    break
-
-        stats["ma7_inflection"] = inflection_found if inflection_found else "continuing"
-    if funding_info:
-        stats["funding_rate"] = funding_info["rate"]
-        stats["funding_next"] = funding_info["next_time"]
-    if funding_times and funding_rates:
-        stats["funding_history"] = (funding_times, funding_rates)
+    # Add funding rate data to stats
+    add_funding_rate_to_stats(stats, funding_info, funding_times, funding_rates)
     
     # 4. Analysis - Use unified predictor interface
     logger.info(f"Step 4/4: Running {args.predictor} analysis...")
@@ -315,6 +183,18 @@ def _create_predictor(args):
             name=args.name,
             config_dir="config"
         )
+    elif args.predictor == "martin":
+        return MartinTrader(
+            symbol=args.symbol,
+            name=args.name,
+            config_dir="config"
+        )
+    elif args.predictor == "kelly":
+        return KellyTrader(
+            symbol=args.symbol,
+            name=args.name,
+            config_dir="config"
+        )
     else:  # llm
         return PositionAdvisor(
             symbol=args.symbol,
@@ -351,8 +231,8 @@ def parse_arguments():
         "-p",
         type=str,
         default="llm",
-        choices=["llm", "quant", "wave"],
-        help="Analysis method: 'llm' for AI advisor (default), 'quant' for quantitative predictor, 'wave' for wave trader",
+        choices=["llm", "quant", "wave", "martin", "kelly"],
+        help="Analysis method: 'llm' for AI advisor (default), 'quant' for quantitative predictor, 'wave' for wave trader, 'martin' for martingale trader, 'kelly' for Kelly Criterion trader",
     )
     # AI service configuration
     parser.add_argument(

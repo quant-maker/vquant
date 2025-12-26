@@ -3,7 +3,12 @@ requests
 matplotlib
 mplfinance
 Pillow  # 图片处理和优化
+scikit-learn  # ML模型（Kelly策略）
 # 国内AI服务API依赖
 dashscope  # 阿里云通义千问
 openai  # OpenAI/智谱GLM通用
 python-dotenv  # 环境变量管理
+
+# 测试依赖
+pytest>=7.0.0
+pytest-cov>=4.0.0
