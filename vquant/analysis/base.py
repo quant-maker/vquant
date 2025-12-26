@@ -7,6 +7,7 @@ Provides unified interface for data preparation and result generation
 """
 
 import logging
+import pandas as pd
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, Tuple
 
@@ -33,6 +34,26 @@ class BasePredictor(ABC):
         """
         self.symbol = symbol
         self.name = name
+    
+    def prepare_stats(self, df: pd.DataFrame, df_display: pd.DataFrame, 
+                      ma_dict: Dict[int, pd.Series], args) -> Dict[str, Any]:
+        """
+        Prepare comprehensive market statistics (shared by all predictors)
+        
+        This is a common method that can be called by all predictors to get
+        standardized market statistics and technical indicators.
+        
+        Args:
+            df: Full dataframe
+            df_display: Display dataframe (limited rows)
+            ma_dict: Full MA dictionary
+            args: Command line arguments
+            
+        Returns:
+            Statistics dictionary containing all market data and indicators
+        """
+        from vquant.data.indicators import prepare_market_stats
+        return prepare_market_stats(df, df_display, ma_dict, args)
     
     @abstractmethod
     def prepare_data(self, df, df_display, ma_dict, ma_dict_display, stats, args) -> Tuple[Optional[str], Optional[bytes]]:

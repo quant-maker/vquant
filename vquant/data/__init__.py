@@ -13,6 +13,10 @@ from .fetcher import (
     prefetch_all_data,
     resample_klines
 )
+from .indicators import (
+    prepare_market_stats,
+    add_funding_rate_to_stats,
+)
 
 __all__ = [
     'fetch_klines_multiple_batches',
@@ -20,5 +24,7 @@ __all__ = [
     'get_cached_klines',
     'clear_cache',
     'prefetch_all_data',
-    'resample_klines'
+    'resample_klines',
+    'prepare_market_stats',
+    'add_funding_rate_to_stats',
 ]
