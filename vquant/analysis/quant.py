@@ -9,13 +9,15 @@ Predicts market direction and provides position recommendations
 import logging
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
+
+from .base import BasePredictor
 
 
 logger = logging.getLogger(__name__)
 
 
-class QuantPredictor:
+class QuantPredictor(BasePredictor):
     """
     Quantitative Predictor - Predicts market direction based on multiple factor scores
 
@@ -29,15 +31,16 @@ class QuantPredictor:
     7. Volume - Volume confirmation
     """
 
-    def __init__(self, symbol: str = "BTCUSDC", config_dir: str = "config"):
+    def __init__(self, symbol: str = "BTCUSDC", name: str = "default", config_dir: str = "config"):
         """
         Initialize predictor
         
         Args:
             symbol: Trading pair symbol (used to load corresponding threshold config)
+            name: Strategy name
             config_dir: Configuration file directory
         """
-        self.symbol = symbol
+        super().__init__(symbol, name)
         self.weights = {
             "funding_rate": 0.20,  # Funding rate weight
             "momentum": 0.20,      # Momentum weight
@@ -86,6 +89,53 @@ class QuantPredictor:
             
         except json.JSONDecodeError as e:
             raise ValueError(f"Config file JSON format error: {e}")
+    
+    def prepare_data(self, df, df_display, ma_dict, ma_dict_display, stats, args) -> Tuple[Optional[str], Optional[bytes]]:
+        """
+        Quantitative predictor doesn't need chart generation
+        
+        Returns:
+            (None, None) as no chart is needed
+        """
+        logger.info("Quantitative predictor mode: skipping chart generation")
+        return None, None
+    
+    def analyze(self, stats: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        Analyze using predict method
+        
+        Args:
+            stats: Statistics dictionary
+            **kwargs: Additional parameters (ignored)
+            
+        Returns:
+            Prediction result
+        """
+        return self.predict(stats)
+    
+    def generate_output(self, result: Dict[str, Any], stats: Dict[str, Any], args) -> Dict[str, Any]:
+        """
+        Generate standardized output for quantitative predictor
+        
+        Args:
+            result: Prediction result from analyze()
+            stats: Statistics dictionary  
+            args: Command line arguments
+            
+        Returns:
+            Standardized output dictionary
+        """
+        return {
+            'symbol': self.symbol,
+            'position': result['position'],
+            'confidence': result['confidence'],
+            'current_price': stats.get('current_price'),
+            'score': result.get('score'),
+            'factors': result.get('factors'),
+            'reasoning': result['reasoning'],
+            'analysis_type': 'predictor',
+        }
+    
     def predict(self, stats: Dict[str, Any]) -> Dict[str, Any]:
         """
         Predict market direction based on market data and provide position recommendations
