@@ -163,7 +163,7 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
     
     # Custom style
     mc = mpf.make_marketcolors(
-        up='red', down='green',  # Red up, green down (CN market convention)
+        up='green', down='red',  # Green up, red down (US market convention)
         edge='inherit',
         wick='inherit',
         volume='in',
@@ -202,13 +202,13 @@ def plot_candlestick(df, symbol='BTCUSDT', save_path='binance_chart.png', ma_dic
     
     # Add RSI to additional plots
     add_plots.append(mpf.make_addplot(rsi, panel=2, color='purple', ylabel='RSI', secondary_y=False, width=0.6))
-    add_plots.append(mpf.make_addplot([70]*len(df), panel=2, color='red', linestyle='--', width=0.4, alpha=0.5))
-    add_plots.append(mpf.make_addplot([30]*len(df), panel=2, color='green', linestyle='--', width=0.4, alpha=0.5))
+    add_plots.append(mpf.make_addplot([70]*len(df), panel=2, color='green', linestyle='--', width=0.4, alpha=0.5))
+    add_plots.append(mpf.make_addplot([30]*len(df), panel=2, color='red', linestyle='--', width=0.4, alpha=0.5))
     
     # Add MACD to additional plots
     add_plots.append(mpf.make_addplot(macd, panel=3, color='blue', ylabel='MACD', width=0.6))
     add_plots.append(mpf.make_addplot(signal_line, panel=3, color='orange', width=0.6))
-    colors = ['red' if h > 0 else 'green' for h in histogram]
+    colors = ['green' if h > 0 else 'red' for h in histogram]
     add_plots.append(mpf.make_addplot(histogram, panel=3, type='bar', color=colors, alpha=0.5))
     
     # Plot using mplfinance with indicators
