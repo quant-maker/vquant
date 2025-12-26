@@ -281,12 +281,13 @@ def fetch_klines_multiple_batches(
                         f"fetching from API..."
                     )
     
-    # Fetch from API
-    all_dfs = []
+    # Fetch from API and write directly to database
     interval_hours = _get_interval_hours(interval)
     hours_needed = days * 24
     klines_needed = int(hours_needed / interval_hours)
     batches = (klines_needed + batch_size - 1) // batch_size
+    
+    total_fetched = 0
     
     if verbose:
         logger.info(
@@ -380,10 +381,14 @@ def fetch_klines_multiple_batches(
             df['close_time'] = pd.to_numeric(df['close_time'], errors='coerce')
             df['trades'] = pd.to_numeric(df['trades'], errors='coerce')
             
-            all_dfs.append(df)
+            # Write directly to database instead of storing in memory
+            if use_cache:
+                _cache.save_data(df, symbol, interval)
+            
+            total_fetched += len(df)
             
             if verbose:
-                logger.info(f"Batch {i+1}: Success ({len(df)} klines)")
+                logger.info(f"Batch {i+1}: Success ({len(df)} klines, total: {total_fetched})")
             
             # Update end time to earliest time of this batch
             end_time = int(df.index.min().timestamp() * 1000) - 1
@@ -399,24 +404,32 @@ def fetch_klines_multiple_batches(
             logger.error(f"Batch {i+1}: Unexpected error: {e}")
             break
     
-    if not all_dfs:
+    if total_fetched == 0:
         logger.error("No data fetched")
         return None
     
-    # Merge all data and remove duplicates
-    combined_df = pd.concat(all_dfs)
-    combined_df = combined_df[~combined_df.index.duplicated(keep='first')]
-    combined_df = combined_df.sort_index()
+    # Read the complete data from database (already sorted by timestamp)
+    if verbose:
+        logger.info(f"Fetched total: {total_fetched} klines, reading from database...")
+    
+    # Calculate the time range we just fetched
+    now_ts = int(time.time() * 1000)
+    start_ts = now_ts - (days * 24 * 60 * 60 * 1000)
+    
+    if resume_from is not None:
+        start_ts = int(resume_from.timestamp() * 1000)
+    
+    combined_df = _cache.get_cached_data(symbol, interval, start_time=start_ts, end_time=now_ts)
+    
+    if combined_df is None or len(combined_df) == 0:
+        logger.error("Failed to read fetched data from database")
+        return None
     
     if verbose:
         logger.info(
-            f"Combined total: {len(combined_df)} klines "
-            f"(≈ {len(combined_df) * interval_hours / 24:.1f} days)"
+            f"Final result: {len(combined_df)} klines "
+            f"({combined_df.index.min()} to {combined_df.index.max()})"
         )
-    
-    # Save to cache
-    if use_cache:
-        _cache.save_data(combined_df, symbol, interval)
     
     return combined_df
 
