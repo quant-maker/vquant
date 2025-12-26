@@ -4,6 +4,8 @@
 *.swap
 *.so
 *.log
+*.db
+*.pkl
 *.json
 .env
 
