@@ -233,7 +233,9 @@ def fetch_klines_multiple_batches(
     verbose: bool = True,
     use_cache: bool = True,
     force_refresh: bool = False,
-    request_delay: float = 0.2
+    request_delay: float = 0.2,
+    resume_from: Optional[datetime] = None,
+    fetch_until: Optional[datetime] = None
 ) -> Optional[pd.DataFrame]:
     """
     Fetch multiple days of K-line data in batches with database caching
@@ -247,6 +249,8 @@ def fetch_klines_multiple_batches(
         use_cache: Use cached data if available
         force_refresh: Force fetch from API even if cache exists
         request_delay: Delay between API requests in seconds (default 0.2, increase for rate limit protection)
+        resume_from: Resume fetching from this datetime (for breakpoint resume)
+        fetch_until: Stop fetching when reaching this datetime (for backfill historical data)
     
     Returns:
         Combined DataFrame with OHLCV data, or None if fetch fails
@@ -290,8 +294,23 @@ def fetch_klines_multiple_batches(
             f"~{klines_needed} klines in {batches} batches"
         )
     
-    # Start from current time and fetch backwards
+    # Determine start and end time
     end_time = int(time.time() * 1000)
+    start_time_limit = None
+    end_time_limit = None
+    
+    if resume_from is not None:
+        # Resume from the last cached timestamp
+        start_time_limit = int(resume_from.timestamp() * 1000)
+        if verbose:
+            logger.info(f"断点续拉：起始时间 {resume_from}")
+    
+    if fetch_until is not None:
+        # Backfill historical data until this timestamp
+        end_time_limit = int(fetch_until.timestamp() * 1000)
+        end_time = end_time_limit  # Start from the earliest cached data
+        if verbose:
+            logger.info(f"历史回填：截止时间 {fetch_until}")
     
     for i in range(batches):
         if verbose:
@@ -314,6 +333,32 @@ def fetch_klines_multiple_batches(
                 if verbose:
                     logger.warning(f"Batch {i+1}: No data returned")
                 break
+            
+            # Check if we've reached the resume point (forward fill)
+            if start_time_limit is not None:
+                earliest_ts = min(item[0] for item in data)
+                if earliest_ts <= start_time_limit:
+                    # Filter out data that's already cached
+                    data = [item for item in data if item[0] > start_time_limit]
+                    if not data:
+                        if verbose:
+                            logger.info(f"Batch {i+1}: Reached cached data, stopping")
+                        break
+                    if verbose:
+                        logger.info(f"Batch {i+1}: Filtered to {len(data)} new klines")
+            
+            # Check if we've reached the end limit (backfill historical)
+            if end_time_limit is not None:
+                latest_ts = max(item[0] for item in data)
+                if latest_ts >= end_time_limit:
+                    # Filter out data that's after the limit
+                    data = [item for item in data if item[0] < end_time_limit]
+                    if not data:
+                        if verbose:
+                            logger.info(f"Batch {i+1}: Reached end limit, stopping")
+                        break
+                    if verbose:
+                        logger.info(f"Batch {i+1}: Filtered to {len(data)} klines before limit")
             
             # Convert to DataFrame
             df = pd.DataFrame(data, columns=[
@@ -585,7 +630,17 @@ def prefetch_all_data(
     
     # Calculate days from start_date to now
     from datetime import datetime
-    start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+    
+    # Try multiple date formats
+    for date_format in ['%Y-%m-%d', '%Y%m%d']:
+        try:
+            start_dt = datetime.strptime(start_date, date_format)
+            break
+        except ValueError:
+            continue
+    else:
+        raise ValueError(f"Invalid date format: {start_date}. Please use YYYY-MM-DD or YYYYMMDD")
+    
     now_dt = datetime.now()
     days = (now_dt - start_dt).days
     
@@ -622,7 +677,60 @@ def prefetch_all_data(
         }
         
         logger.info(f"\n[{completed}/{total_tasks}] 拉取 {task_name} 从{start_date}至今的数据...")
-        expected_klines = days * 24 * 60  # 1分钟数据点数
+        
+        # Check existing data for resume capability
+        cache = DataCache()
+        data_range = cache.get_data_range(symbol, interval)
+        
+        actual_days = days
+        resume_from = None
+        fetch_until = None
+        effective_start_dt = start_dt
+        
+        if data_range:
+            min_time, max_time = data_range
+            min_time_naive = min_time.replace(tzinfo=None)
+            max_time_naive = max_time.replace(tzinfo=None)
+            logger.info(f"已有缓存数据：{min_time} 至 {max_time}")
+            
+            # Case 1: User's start_date is earlier than cached data (backfill historical)
+            if start_dt < min_time_naive:
+                logger.warning(
+                    f"指定起始日期 {start_dt.date()} 早于缓存最早数据 {min_time.date()}，"
+                    f"将回填历史数据至 {min_time.date()}"
+                )
+                actual_days = (min_time_naive - start_dt).days + 1
+                fetch_until = min_time
+                effective_start_dt = start_dt
+            # Case 2: User's start_date is later than cached data (fill forward)
+            elif start_dt > max_time_naive:
+                logger.warning(
+                    f"指定起始日期 {start_dt.date()} 晚于缓存最新数据 {max_time.date()}，"
+                    f"将从 {max_time.date()} 继续拉取以避免数据断层"
+                )
+                effective_start_dt = max_time_naive
+                # Recalculate days from the cached max_time to now
+                actual_days = (now_dt - max_time_naive).days + 1
+                resume_from = max_time
+            # Case 3: Normal case - update to latest
+            else:
+                # Calculate gap from cached data to now
+                time_gap = (now_dt - max_time_naive).total_seconds() / 86400
+                if time_gap > 0.01:  # More than ~15 minutes gap
+                    actual_days = int(time_gap) + 1  # Add 1 day buffer
+                    resume_from = max_time
+                    logger.info(f"断点续拉：从 {max_time} 继续拉取 {actual_days} 天数据")
+                else:
+                    logger.info(f"数据已是最新，跳过拉取")
+                    task_info['status'] = 'skipped'
+                    task_info['reason'] = 'data is up to date'
+                    stats['tasks'].append(task_info)
+                    stats['success'] += 1
+                    continue
+        else:
+            logger.info("无缓存数据，从指定日期开始拉取")
+        
+        expected_klines = actual_days * 24 * 60  # 1分钟数据点数
         expected_batches = (expected_klines + 999) // 1000
         logger.info(f"预计：约{expected_klines:,}条数据，{expected_batches}个批次")
         
@@ -632,11 +740,13 @@ def prefetch_all_data(
             df = fetch_klines_multiple_batches(
                 symbol=symbol,
                 interval=interval,
-                days=days,
+                days=actual_days,
                 verbose=True,
                 use_cache=True,
                 force_refresh=False,
-                request_delay=request_delay  # 添加请求延迟
+                request_delay=request_delay,  # 添加请求延迟
+                resume_from=resume_from,  # 断点续拉起点
+                fetch_until=fetch_until  # 历史回填终点
             )
             
             elapsed = time.time() - start_time

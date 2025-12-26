@@ -79,16 +79,30 @@ class WaveTrader(BasePredictor):
         """
         config_path = Path(config_dir) / f"wave_{name}.json"
         
+        # Try specific config file first, then fallback to wave.json
         if not config_path.exists():
-            raise FileNotFoundError(
-                f"Wave trader config file not found: {config_path}\n"
-                f"Please create config file for {symbol}"
-            )
+            fallback_path = Path(config_dir) / "wave.json"
+            if fallback_path.exists():
+                logger.info(f"Config {config_path.name} not found, using fallback: {fallback_path.name}")
+                config_path = fallback_path
+            else:
+                raise FileNotFoundError(
+                    f"Wave trader config file not found: {config_path}\n"
+                    f"Also tried fallback: {fallback_path}\n"
+                    f"Please create config file for {symbol}"
+                )
         
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
-            assert symbol == config["symbol"]
+            
+            # Validate symbol matches (if specified in config)
+            if "symbol" in config and config["symbol"] != symbol:
+                logger.warning(
+                    f"Config file symbol '{config['symbol']}' doesn't match requested '{symbol}', "
+                    f"using config symbol"
+                )
+            
             return config
         except json.JSONDecodeError as e:
             raise ValueError(f"Config file JSON format error: {e}")

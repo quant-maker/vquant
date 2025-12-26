@@ -45,7 +45,7 @@ def train_kelly_model(
     
     # 1. Initialize Kelly trader
     logger.info(f"\n1. Initializing Kelly trader (name={name})...")
-    trader = KellyTrader(symbol=symbol, name=name)
+    trader = KellyTrader(symbol=symbol, name=name, training_mode=True)
     logger.info(f"✓ Trader initialized")
     
     # 2. Load historical data

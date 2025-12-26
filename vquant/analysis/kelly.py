@@ -46,7 +46,8 @@ class KellyTrader(BasePredictor):
         self,
         symbol: str = "BTCUSDC",
         name: str = "default",
-        config_dir: str = "config"
+        config_dir: str = "config",
+        training_mode: bool = False
     ):
         """
         Initialize Kelly trader
@@ -55,6 +56,7 @@ class KellyTrader(BasePredictor):
             symbol: Trading pair symbol
             name: Strategy name (used for state file naming)
             config_dir: Directory containing config files
+            training_mode: If True, allow missing model files (for training). If False, require model files (for trading).
         """
         super().__init__(symbol, name)
         
@@ -84,14 +86,16 @@ class KellyTrader(BasePredictor):
         )
         
         # ML model for win probability prediction
+        sym = symbol.lower().split("usd")[0]
         self.model: Optional[RandomForestClassifier] = None
         self.scaler: Optional[StandardScaler] = None
-        self.model_path = Path("data") / f'kelly_model_{name}.pkl'
-        self.scaler_path = Path("data") / f'kelly_scaler_{name}.pkl'
+        self.model_path = Path("data") / f'kelly_model_{sym}_{name}.pkl'
+        self.scaler_path = Path("data") / f'kelly_scaler_{sym}_{name}.pkl'
         
         # Training configuration
         self.min_samples_for_training = config.get('min_samples_for_training', 100)
         self.retrain_interval = config.get('retrain_interval', 50)
+        self.training_mode = training_mode
         
         # Load or initialize state
         self.state = self._load_state()
@@ -116,16 +120,30 @@ class KellyTrader(BasePredictor):
         """
         config_path = Path(config_dir) / f"kelly_{name}.json"
         
+        # Try specific config file first, then fallback to kelly.json
         if not config_path.exists():
-            raise FileNotFoundError(
-                f"Kelly trader config file not found: {config_path}\n"
-                f"Please create config file for {symbol}"
-            )
+            fallback_path = Path(config_dir) / "kelly.json"
+            if fallback_path.exists():
+                logger.info(f"Config {config_path.name} not found, using fallback: {fallback_path.name}")
+                config_path = fallback_path
+            else:
+                raise FileNotFoundError(
+                    f"Kelly trader config file not found: {config_path}\n"
+                    f"Also tried fallback: {fallback_path}\n"
+                    f"Please create config file for {symbol}"
+                )
         
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
-            assert symbol == config["symbol"]
+            
+            # Validate symbol matches (if specified in config)
+            if "symbol" in config and config["symbol"] != symbol:
+                logger.fatal(
+                    f"Config file symbol '{config['symbol']}' doesn't match requested '{symbol}', "
+                    f"using config symbol"
+                )
+            
             return config
         except json.JSONDecodeError as e:
             raise ValueError(f"Config file JSON format error: {e}")
@@ -262,18 +280,29 @@ class KellyTrader(BasePredictor):
     
     def _load_model(self) -> None:
         """Load trained ML model from disk."""
+        if not self.model_path.exists() or not self.scaler_path.exists():
+            if self.training_mode:
+                logger.info(f"No existing model found at {self.model_path} (training mode)")
+                return
+            else:
+                raise FileNotFoundError(
+                    f"Model files not found: {self.model_path} and {self.scaler_path}. "
+                    "Please train the model first using vquant/model/train.py"
+                )
+        
         try:
-            if self.model_path.exists() and self.scaler_path.exists():
-                with open(self.model_path, 'rb') as f:
-                    self.model = pickle.load(f)
-                with open(self.scaler_path, 'rb') as f:
-                    self.scaler = pickle.load(f)
-                logger.info(f"Loaded ML model from {self.model_path}")
+            with open(self.model_path, 'rb') as f:
+                self.model = pickle.load(f)
+            with open(self.scaler_path, 'rb') as f:
+                self.scaler = pickle.load(f)
+            logger.info(f"Loaded ML model from {self.model_path}")
         except Exception as e:
-            logger.warning(f"Failed to load model: {e}")
+            logger.error(f"Failed to load model: {e}")
+            if not self.training_mode:
+                raise
             self.model = None
             self.scaler = None
-    
+
     def _save_model(self) -> None:
         """Save trained ML model to disk."""
         try:
@@ -918,3 +947,177 @@ class KellyTrader(BasePredictor):
         logger.info(f"Signal: {signal['action'].upper()} - {signal['reasoning']}")
         
         return signal
+    
+    def plot_test_pnl_curve(self, test_data: List[Dict[str, Any]], save_path: str = None) -> Optional[str]:
+        """
+        Generate PnL curve using trained model on test dataset
+        
+        Args:
+            test_data: List of test data points, each containing:
+                - features: Market features
+                - actual_pnl: Actual P&L percentage
+                - timestamp: Trade timestamp
+            save_path: Path to save the plot (default: auto-generate)
+            
+        Returns:
+            Path to saved plot, or None if failed
+        """
+        if not test_data:
+            logger.warning("No test data provided for PnL curve")
+            return None
+        
+        if self.model is None or self.scaler is None:
+            logger.warning("Model not trained, cannot generate test PnL curve")
+            return None
+        
+        try:
+            import matplotlib.pyplot as plt
+            import matplotlib.dates as mdates
+            from datetime import datetime
+            
+            # Extract data
+            timestamps = []
+            actual_pnls = []
+            predicted_probs = []
+            
+            for sample in test_data:
+                if 'timestamp' in sample:
+                    if isinstance(sample['timestamp'], str):
+                        timestamps.append(datetime.fromisoformat(sample['timestamp']))
+                    else:
+                        timestamps.append(sample['timestamp'])
+                else:
+                    timestamps.append(datetime.now())
+                
+                actual_pnls.append(sample.get('actual_pnl', 0))
+                
+                # Predict with model
+                features = np.array(sample['features']).reshape(1, -1)
+                features_scaled = self.scaler.transform(features)
+                prob = self.model.predict_proba(features_scaled)[0][1]
+                predicted_probs.append(prob)
+            
+            # Calculate cumulative PnL
+            cumulative_pnl = np.cumsum(actual_pnls)
+            
+            # Calculate model-based position sizes using Kelly
+            position_sizes = []
+            for prob in predicted_probs:
+                # Use historical P&L ratio or default
+                pl_ratio = self.state.get('profit_loss_ratio', 1.5)
+                kelly_pct = self._calculate_kelly_from_params(prob, pl_ratio)
+                position_sizes.append(kelly_pct)
+            
+            # Calculate weighted PnL (position-size adjusted)
+            weighted_pnls = [pnl * size for pnl, size in zip(actual_pnls, position_sizes)]
+            cumulative_weighted_pnl = np.cumsum(weighted_pnls)
+            
+            # Create figure with multiple subplots
+            fig, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+            fig.suptitle(f'Kelly Strategy - Test Set Performance ({self.symbol})', 
+                        fontsize=14, fontweight='bold')
+            
+            # Plot 1: Cumulative PnL
+            ax1 = axes[0]
+            ax1.plot(timestamps, cumulative_pnl, label='Actual PnL (Equal Size)', 
+                    color='blue', linewidth=2, alpha=0.7)
+            ax1.plot(timestamps, cumulative_weighted_pnl, label='Kelly-Weighted PnL', 
+                    color='green', linewidth=2, alpha=0.7)
+            ax1.axhline(y=0, color='black', linestyle='--', alpha=0.3)
+            ax1.set_ylabel('Cumulative PnL (%)', fontsize=11)
+            ax1.legend(loc='best')
+            ax1.grid(True, alpha=0.3)
+            ax1.set_title('Cumulative PnL Comparison', fontsize=11)
+            
+            # Plot 2: Win Probability Predictions
+            ax2 = axes[1]
+            ax2.plot(timestamps, predicted_probs, label='Predicted Win Probability', 
+                    color='purple', linewidth=1.5, alpha=0.7)
+            ax2.axhline(y=0.5, color='red', linestyle='--', alpha=0.5, label='50% Threshold')
+            ax2.set_ylabel('Win Probability', fontsize=11)
+            ax2.set_ylim([0, 1])
+            ax2.legend(loc='best')
+            ax2.grid(True, alpha=0.3)
+            ax2.set_title('ML Model Win Probability Predictions', fontsize=11)
+            
+            # Plot 3: Kelly Position Sizes
+            ax3 = axes[2]
+            ax3.bar(timestamps, position_sizes, label='Kelly Position Size', 
+                   color='orange', alpha=0.6, width=0.8)
+            ax3.set_ylabel('Position Size (% of Capital)', fontsize=11)
+            ax3.set_xlabel('Time', fontsize=11)
+            ax3.legend(loc='best')
+            ax3.grid(True, alpha=0.3)
+            ax3.set_title('Kelly Criterion Position Sizing', fontsize=11)
+            
+            # Format x-axis
+            for ax in axes:
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d %H:%M'))
+                ax.tick_params(axis='x', rotation=45)
+            
+            # Add statistics text
+            final_pnl = cumulative_pnl[-1]
+            final_weighted_pnl = cumulative_weighted_pnl[-1]
+            win_rate = np.mean([1 if pnl > 0 else 0 for pnl in actual_pnls])
+            avg_win = np.mean([pnl for pnl in actual_pnls if pnl > 0]) if any(pnl > 0 for pnl in actual_pnls) else 0
+            avg_loss = np.mean([pnl for pnl in actual_pnls if pnl < 0]) if any(pnl < 0 for pnl in actual_pnls) else 0
+            
+            stats_text = (
+                f"Test Set Statistics:\n"
+                f"Total Trades: {len(test_data)}\n"
+                f"Win Rate: {win_rate:.2%}\n"
+                f"Final PnL (Equal): {final_pnl:.2f}%\n"
+                f"Final PnL (Kelly): {final_weighted_pnl:.2f}%\n"
+                f"Avg Win: {avg_win:.2f}%\n"
+                f"Avg Loss: {avg_loss:.2f}%\n"
+                f"P/L Ratio: {abs(avg_win/avg_loss):.2f}x" if avg_loss != 0 else "N/A"
+            )
+            
+            plt.figtext(0.15, 0.02, stats_text, fontsize=9, 
+                       bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+            
+            plt.tight_layout(rect=[0, 0.1, 1, 0.96])
+            
+            # Save figure
+            if save_path is None:
+                timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                save_path = f"charts/kelly_test_pnl_{self.name}_{timestamp_str}.png"
+            
+            Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+            plt.savefig(save_path, dpi=100, bbox_inches='tight')
+            plt.close()
+            
+            logger.info(f"Test PnL curve saved to: {save_path}")
+            logger.info(f"Test performance: Equal PnL={final_pnl:.2f}%, Kelly PnL={final_weighted_pnl:.2f}%")
+            
+            return save_path
+            
+        except Exception as e:
+            logger.error(f"Failed to generate test PnL curve: {e}")
+            return None
+    
+    def _calculate_kelly_from_params(self, win_prob: float, pl_ratio: float) -> float:
+        """
+        Calculate Kelly percentage from win probability and P/L ratio
+        
+        Args:
+            win_prob: Win probability (0-1)
+            pl_ratio: Profit/loss ratio
+            
+        Returns:
+            Kelly percentage (0-1)
+        """
+        if pl_ratio <= 0:
+            return 0.0
+        
+        # Kelly formula: f* = (bp - q) / b
+        # where b = P/L ratio, p = win prob, q = 1-p
+        kelly = (pl_ratio * win_prob - (1 - win_prob)) / pl_ratio
+        
+        # Apply Kelly fraction for safety
+        kelly = kelly * self.kelly_fraction
+        
+        # Ensure within bounds
+        kelly = max(0, min(kelly, self.max_position_pct))
+        
+        return kelly
