@@ -19,6 +19,8 @@ from vquant.model.vision import (
 from vquant.analysis.advisor import PositionAdvisor
 from vquant.analysis.quant import QuantPredictor
 from vquant.analysis.wave import WaveTrader
+from vquant.analysis.martin import MartinTrader
+from vquant.analysis.kelly import KellyTrader
 
 
 # 配置日志
@@ -315,6 +317,18 @@ def _create_predictor(args):
             name=args.name,
             config_dir="config"
         )
+    elif args.predictor == "martin":
+        return MartinTrader(
+            symbol=args.symbol,
+            name=args.name,
+            config_dir="config"
+        )
+    elif args.predictor == "kelly":
+        return KellyTrader(
+            symbol=args.symbol,
+            name=args.name,
+            config_dir="config"
+        )
     else:  # llm
         return PositionAdvisor(
             symbol=args.symbol,
@@ -351,8 +365,8 @@ def parse_arguments():
         "-p",
         type=str,
         default="llm",
-        choices=["llm", "quant", "wave"],
-        help="Analysis method: 'llm' for AI advisor (default), 'quant' for quantitative predictor, 'wave' for wave trader",
+        choices=["llm", "quant", "wave", "martin", "kelly"],
+        help="Analysis method: 'llm' for AI advisor (default), 'quant' for quantitative predictor, 'wave' for wave trader, 'martin' for martingale trader, 'kelly' for Kelly Criterion trader",
     )
     # AI service configuration
     parser.add_argument(

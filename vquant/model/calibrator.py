@@ -15,6 +15,7 @@ import pandas as pd
 
 from pathlib import Path
 from datetime import datetime
+from ..data import fetch_klines_multiple_batches
 
 
 def calculate_ma(prices, period):
@@ -87,75 +88,6 @@ def calculate_impulse(closes, volumes):
         impulse_values.append(weighted_impulse)
     
     return impulse_values
-
-
-def fetch_klines_multiple_batches(symbol, interval='1h', days=365):
-    """
-    Fetch multiple days of K-line data in batches (using endTime parameter to fetch backwards)
-    
-    Args:
-        symbol: Trading pair
-        interval: K-line period
-        days: Number of days needed
-    
-    Returns:
-        Combined DataFrame
-    """
-    import requests
-    
-    all_dfs = []
-    batch_size = 1000  # 1000 per batch (Binance limit)
-    
-    # Calculate number of batches needed
-    hours_needed = days * 24
-    batches = (hours_needed + batch_size - 1) // batch_size
-    
-    print(f"  Need to fetch ~{hours_needed} klines in {batches} batches")
-    
-    # Start from current time and fetch backwards
-    end_time = int(time.time() * 1000)  # millisecond timestamp
-    for i in range(batches):
-        print(f"  Fetching batch {i+1}/{batches}...", end='')
-        try:
-            url = 'https://api.binance.com/api/v3/klines'
-            params = {
-                'symbol': symbol,
-                'interval': interval,
-                'limit': batch_size,
-                'endTime': end_time
-            }
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            if not data:
-                print(f" no data")
-                break
-            # Convert to DataFrame
-            df = pd.DataFrame(data, columns=[
-                'timestamp', 'open', 'high', 'low', 'close', 'volume',
-                'close_time', 'quote_volume', 'trades', 'taker_buy_base',
-                'taker_buy_quote', 'ignore'
-            ])
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-            df.set_index('timestamp', inplace=True)
-            all_dfs.append(df)
-            print(f" success ({len(df)} bars)")
-            # Update end time to earliest time of this batch (continue fetching backwards)
-            end_time = int(df.index.min().timestamp() * 1000) - 1
-            # Avoid too frequent requests
-            if i < batches - 1:
-                time.sleep(0.2)
-        except Exception as e:
-            print(f" failed: {e}")
-            break
-    if not all_dfs:
-        return None
-    # Merge all data and remove duplicates
-    combined_df = pd.concat(all_dfs)
-    combined_df = combined_df[~combined_df.index.duplicated(keep='first')]
-    combined_df = combined_df.sort_index()
-    print(f"  Combined total: {len(combined_df)} klines (≈ {len(combined_df)/24:.1f} days)")
-    return combined_df
 
 
 def analyze_symbol(symbol, interval='1h', days=365):
