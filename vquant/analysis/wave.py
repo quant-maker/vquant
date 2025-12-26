@@ -13,13 +13,15 @@ import logging
 
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
+
+from .base import BasePredictor
 
 
 logger = logging.getLogger(__name__)
 
 
-class WaveTrader:
+class WaveTrader(BasePredictor):
     """
     Wave-based trading strategy
     
@@ -44,8 +46,7 @@ class WaveTrader:
             name: Strategy name (used for state file naming)
             config_dir: Directory containing config files
         """
-        self.symbol = symbol
-        self.name = name
+        super().__init__(symbol, name)
         
         # Load configuration from file
         config = self._load_config(self.name, self.symbol, config_dir)
@@ -184,6 +185,68 @@ class WaveTrader:
         
         self._save_state()
         logger.info(f"Recorded trade: {action} {volume} @ {price}")
+    
+    def prepare_data(self, df, df_display, ma_dict, ma_dict_display, stats, args) -> Tuple[Optional[str], Optional[bytes]]:
+        """
+        Wave trader doesn't need chart generation
+        
+        Returns:
+            (None, None) as no chart is needed
+        """
+        logger.info("Wave trader mode: skipping chart generation")
+        return None, None
+    
+    def analyze(self, stats: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        Analyze using wave trading strategy
+        
+        Args:
+            stats: Statistics dictionary
+            **kwargs: Additional parameters (volume from args)
+            
+        Returns:
+            Trading signal
+        """
+        current_price = stats.get('current_price')
+        args = kwargs.get('args')
+        volume = args.volume if args and args.volume > 0 else 0.1
+        
+        return self.generate_signal(
+            current_price=current_price,
+            volume=volume,
+            stats=stats
+        )
+    
+    def generate_output(self, result: Dict[str, Any], stats: Dict[str, Any], args) -> Dict[str, Any]:
+        """
+        Generate standardized output for wave trader
+        
+        Args:
+            result: Signal result from analyze()
+            stats: Statistics dictionary
+            args: Command line arguments
+            
+        Returns:
+            Standardized output dictionary
+        """
+        # Convert action to position
+        action_to_position = {
+            'buy': 1.0,
+            'sell': -1.0,
+            'hold': 0.0
+        }
+        
+        return {
+            'symbol': result['symbol'],
+            'position': action_to_position.get(result['action'], 0.0),
+            'confidence': 'high' if result['action'] in ['buy', 'sell'] else 'low',
+            'current_price': result['current_price'],
+            'action': result['action'],
+            'volume': result['volume'],
+            'reasoning': result['reasoning'],
+            'analysis_type': 'wave',
+            'price_change': result.get('price_change'),
+        }
     
     def generate_signal(
         self,
