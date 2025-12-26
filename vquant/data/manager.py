@@ -178,7 +178,7 @@ Note:
     # View command
     view_parser = subparsers.add_parser('view', help='View cached data')
     view_parser.add_argument('--symbol', required=True, help='Trading pair')
-    view_parser.add_argument('--interval', default='1h', help='K-line interval')
+    view_parser.add_argument('--interval', default='1m', help='K-line interval')
     view_parser.add_argument('--days', type=int, default=30, help='Days to view')
     
     # Refresh command
