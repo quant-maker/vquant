@@ -17,7 +17,6 @@ from vquant.model.vision import (
 from vquant.data.indicators import prepare_market_stats, add_funding_rate_to_stats
 from vquant.analysis.advisor import PositionAdvisor
 from vquant.analysis.quant import QuantPredictor
-from vquant.analysis.wave import WaveTrader
 from vquant.analysis.martin import MartinTrader
 from vquant.analysis.kelly import KellyTrader
 
@@ -171,13 +170,7 @@ def run(args):
 
 def _create_predictor(args):
     """Create appropriate predictor instance based on args"""
-    if args.predictor == "wave":
-        return WaveTrader(
-            symbol=args.symbol,
-            name=args.name,
-            config_dir="config"
-        )
-    elif args.predictor == "quant":
+    if args.predictor == "quant":
         return QuantPredictor(
             symbol=args.symbol,
             name=args.name,
@@ -231,8 +224,9 @@ def parse_arguments():
         "-p",
         type=str,
         default="llm",
-        choices=["llm", "quant", "wave", "martin", "kelly"],
-        help="Analysis method: 'llm' for AI advisor (default), 'quant' for quantitative predictor, 'wave' for wave trader, 'martin' for martingale trader, 'kelly' for Kelly Criterion trader",
+        choices=["llm", "quant", "martin", "kelly"],
+        help="Analysis method: 'llm' for AI advisor (default), 'quant' for quantitative predictor, "
+             "'martin' for martingale trader, 'kelly' for Kelly Criterion trader",
     )
     # AI service configuration
     parser.add_argument(
