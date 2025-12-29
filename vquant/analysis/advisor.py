@@ -564,20 +564,20 @@ Return only JSON, no other content."""
         if "position" in result:
             result["position"] = max(-1.0, min(1.0, result["position"]))
 
-        # Save as JSON
-        if image_path:
-            json_path = image_path.rsplit(".", 1)[0] + ".json"
-        else:
-            # 如果没有图片路径（quiet模式），使用和图片相同的命名规则
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            symbol_str = symbol if symbol else "unknown"
-            interval_str = interval if interval else "unknown"
-            json_path = f"charts/{symbol_str}_{interval_str}_{timestamp}.json"
-            os.makedirs("charts", exist_ok=True)
+        # # Save as JSON
+        # if image_path:
+        #     json_path = image_path.rsplit(".", 1)[0] + ".json"
+        # else:
+        #     # 如果没有图片路径（quiet模式），使用和图片相同的命名规则
+        #     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        #     symbol_str = symbol if symbol else "unknown"
+        #     interval_str = interval if interval else "unknown"
+        #     json_path = f"charts/{symbol_str}_{interval_str}_{timestamp}.json"
+        #     os.makedirs("charts", exist_ok=True)
 
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
-        logger.info(f"Analysis result saved to: {json_path}")
+        # with open(json_path, "w", encoding="utf-8") as f:
+        #     json.dump(result, f, ensure_ascii=False, indent=2)
+        # logger.info(f"Analysis result saved to: {json_path}")
         logger.debug(
             f"Analysis result: position={result.get('position')}, confidence={result.get('confidence')}"
         )
