@@ -592,7 +592,14 @@ class KalshiTrader(BasePredictor):
         
         reasoning = "\n".join(reasoning_parts)
         
-        logger.info(f"Kalshi策略不需要生成图表数据")
+        # 将详细分析写入日志，方便复盘
+        logger.info("=" * 60)
+        logger.info("📊 Kalshi策略详细分析报告")
+        logger.info("=" * 60)
+        for line in reasoning_parts:
+            if line:  # 跳过空行
+                logger.info(line)
+        logger.info("=" * 60)
         
         return {
             "position": float(prediction),
