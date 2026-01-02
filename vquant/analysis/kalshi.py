@@ -605,7 +605,9 @@ class KalshiTrader(BasePredictor):
             "chart_data": None,
             # 添加交易所需的额外信息
             "sentiment": sentiment_data,
-            "technical_indicators": result.get('technical_indicators', {})
+            "technical_indicators": result.get('technical_indicators', {}),
+            # 从technical_indicators中提取current_price到顶层
+            "current_price": result.get('technical_indicators', {}).get('current_price', 0.0)
         }
 
 
