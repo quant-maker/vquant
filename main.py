@@ -19,6 +19,7 @@ from vquant.analysis.advisor import PositionAdvisor
 from vquant.analysis.quant import QuantPredictor
 from vquant.analysis.martin import MartinTrader
 from vquant.analysis.kelly import KellyTrader
+from vquant.analysis.kalshi import KalshiTrader
 
 
 # 配置日志
@@ -188,6 +189,14 @@ def _create_predictor(args):
             name=args.name,
             config_dir="config"
         )
+    elif args.predictor == "kalshi":
+        return KalshiTrader(
+            symbol=args.symbol,
+            name=args.name,
+            email=args.kalshi_email,
+            password=args.kalshi_password,
+            config_path=args.kalshi_config
+        )
     else:  # llm
         return PositionAdvisor(
             symbol=args.symbol,
@@ -224,9 +233,10 @@ def parse_arguments():
         "-p",
         type=str,
         default="llm",
-        choices=["llm", "quant", "martin", "kelly"],
+        choices=["llm", "quant", "martin", "kelly", "kalshi"],
         help="Analysis method: 'llm' for AI advisor (default), 'quant' for quantitative predictor, "
-             "'martin' for martingale trader, 'kelly' for Kelly Criterion trader",
+             "'martin' for martingale trader, 'kelly' for Kelly Criterion trader, "
+             "'kalshi' for Kalshi prediction market based trader",
     )
     # AI service configuration
     parser.add_argument(
@@ -242,6 +252,23 @@ def parse_arguments():
         "-m",
         type=str,
         help="AI model name (copilot options: gpt-4o, claude-3.5-sonnet, o1-preview, etc.)",
+    )
+    # Kalshi strategy parameters
+    parser.add_argument(
+        "--kalshi-email",
+        type=str,
+        help="Kalshi account email (optional, for accessing private data)",
+    )
+    parser.add_argument(
+        "--kalshi-password",
+        type=str,
+        help="Kalshi account password (optional)",
+    )
+    parser.add_argument(
+        "--kalshi-config",
+        type=str,
+        default="config/kalshi_strategy.json",
+        help="Kalshi strategy configuration file path (default: config/kalshi_strategy.json)",
     )
     # Trading parameters
     parser.add_argument(
