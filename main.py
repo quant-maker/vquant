@@ -125,7 +125,8 @@ def run(args):
         
         # Log result
         logger.info(f"Analysis result: position={result.get('position')}, confidence={result.get('confidence')}")
-        logger.info(f"Reasoning: {result.get('reasoning', 'N/A')}")
+        # Reasoning已经在策略内部打印过了，这里不重复打印
+        # logger.info(f"Reasoning: {result.get('reasoning', 'N/A')}")
         
     except Exception as e:
         logger.exception(f"Analysis failed: {e}", exc_info=True)

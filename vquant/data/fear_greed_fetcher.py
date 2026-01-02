@@ -73,7 +73,7 @@ class FearGreedFetcher:
             # 转换为0-1的情绪得分
             sentiment_score = value / 100
             
-            logger.info(f"Fear & Greed Index: {value} ({classification})")
+            # logger.info(f"Fear & Greed Index: {value} ({classification})")
             
             return {
                 'value': value,
@@ -124,7 +124,7 @@ class FearGreedFetcher:
             df.set_index('timestamp', inplace=True)
             df.sort_index(inplace=True)
             
-            logger.info(f"获取到 {len(df)} 天的历史数据")
+            # logger.info(f"获取到 {len(df)} 天的历史数据")
             return df
             
         except Exception as e:

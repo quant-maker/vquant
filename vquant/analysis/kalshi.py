@@ -93,6 +93,7 @@ class KalshiTrader(BasePredictor):
         
         # K线数据缓存
         self.cached_df = None
+        self.cached_sentiment_data = None  # 缓存sentiment数据
     
     def predict(self, df: pd.DataFrame) -> float:
         """
@@ -122,16 +123,13 @@ class KalshiTrader(BasePredictor):
                     # 做多信号
                     raw_position = (sentiment_score - 0.5) * 2  # 映射到0-1
                     raw_position = min(raw_position, self.max_position)
-                    logger.info(f"做多信号: 情绪={sentiment_score:.3f}, 原始仓位={raw_position:.2f}")
                     
                 elif sentiment_score <= self.sentiment_threshold_short:
                     # 做空信号
                     raw_position = (sentiment_score - 0.5) * 2  # 映射到-1-0
                     raw_position = max(raw_position, -self.max_position)
-                    logger.info(f"做空信号: 情绪={sentiment_score:.3f}, 原始仓位={raw_position:.2f}")
                 
                 else:
-                    logger.info(f"情绪中性({sentiment_score:.3f})，原始建议空仓")
                     raw_position = 0.0
                 
                 # 4. 技术指标过滤
@@ -145,12 +143,9 @@ class KalshiTrader(BasePredictor):
                 # 6. 限制在最大仓位范围内
                 raw_position = np.clip(raw_position, -self.max_position, self.max_position)
             
-            logger.info(f"计算得到目标仓位: {raw_position:.3f}")
-            
             # 7. 应用仓位稳定性机制
             stable_position = self._apply_position_stability(raw_position)
             
-            logger.info(f"最终稳定仓位: {stable_position:.3f}")
             return stable_position
             
         except Exception as e:
@@ -243,11 +238,18 @@ class KalshiTrader(BasePredictor):
             return {}
     
     def _get_market_sentiment(self) -> Dict[str, Any]:
-        """获取市场情绪数据"""
+        """获取市场情绪数据（带缓存）"""
+        # 如果有缓存，直接返回
+        if self.cached_sentiment_data is not None:
+            return self.cached_sentiment_data
+        
+        # 获取新数据并缓存
         if self.use_fear_greed:
-            return self._get_fear_greed_sentiment()
+            self.cached_sentiment_data = self._get_fear_greed_sentiment()
         else:
-            return self._get_kalshi_sentiment()
+            self.cached_sentiment_data = self._get_kalshi_sentiment()
+        
+        return self.cached_sentiment_data
     
     def _get_fear_greed_sentiment(self) -> Dict[str, Any]:
         """从Fear & Greed Index获取情绪"""
@@ -260,10 +262,6 @@ class KalshiTrader(BasePredictor):
             # 获取7天和3天的趋势
             trend_7d = self.fear_greed_fetcher.get_trend(days=7)
             trend_3d = self.fear_greed_fetcher.get_trend(days=3)
-            
-            logger.info(f"Fear & Greed Index: {value} ({classification})")
-            logger.info(f"  7天变化: {trend_7d.get('change', 0):+d} ({trend_7d.get('direction', 'unknown')})")
-            logger.info(f"  3天变化: {trend_3d.get('change', 0):+d} ({trend_3d.get('direction', 'unknown')})")
             
             # 反向指标模式（默认）：恐慌时买入，贪婪时卖出
             if self.fear_greed_mode == "contrarian":
@@ -282,25 +280,19 @@ class KalshiTrader(BasePredictor):
                 trend_change = trend_7d.get('change', 0)
                 if value < 50 and trend_change > 3:  # 恐慌中恢复
                     trend_boost = 0.15
-                    logger.info("  趋势分析: 市场从恐慌中恢复，反向买入的好时机")
                 elif value > 50 and trend_change < -3:  # 贪婪中回落
                     trend_boost = -0.15
-                    logger.info("  趋势分析: 市场贪婪情绪减弱，反向卖出信号")
             
             sentiment_score = np.clip(base_sentiment + trend_boost, 0.0, 1.0)
-            
-            logger.info(f"  基础情绪: {base_sentiment:.3f}")
-            logger.info(f"  趋势调整: {trend_boost:+.3f}")
-            logger.info(f"  最终情绪: {sentiment_score:.3f}")
             
             return {
                 "sentiment_score": sentiment_score,
                 "confidence": 0.85,  # Fear & Greed Index聚合多个数据源，可信度高
                 "source": "fear_greed",
-                "raw_value": value,
+                "raw_value": int(value),  # 转换为Python int
                 "classification": classification,
-                "trend_7d": trend_7d,
-                "trend_3d": trend_3d,
+                "trend_7d": {k: int(v) if isinstance(v, (np.integer, np.int64)) else v for k, v in trend_7d.items()},
+                "trend_3d": {k: int(v) if isinstance(v, (np.integer, np.int64)) else v for k, v in trend_3d.items()},
                 "mode": self.fear_greed_mode
             }
             
@@ -388,7 +380,6 @@ class KalshiTrader(BasePredictor):
         
         # 如果是首次计算，直接返回
         if self.last_position_time is None:
-            logger.info(f"首次计算仓位: {new_position:.3f}")
             self.last_position = new_position
             self.last_position_time = now
             self.position_history.append({'time': now, 'position': new_position})
@@ -406,7 +397,7 @@ class KalshiTrader(BasePredictor):
         
         # 1. 如果变化很小，保持原仓位
         if position_change < self.position_change_threshold:
-            logger.info(f"仓位变化过小({position_change:.3f} < {self.position_change_threshold})，保持原仓位 {self.last_position:.3f}")
+            logger.info(f"仓位变化过小({position_change:.3f})，保持原仓位 {self.last_position:.3f}")
             return self.last_position
         
         # 2. 如果持仓时间不足，需要更强的信号才能调仓
@@ -415,7 +406,7 @@ class KalshiTrader(BasePredictor):
                 should_change = True
                 reason = f"强烈信号(变化={position_change:.3f})，提前调仓"
             else:
-                logger.warning(f"持仓时间不足({time_since_last:.1f}分钟 < {self.min_hold_minutes}分钟)，保持原仓位")
+                logger.info(f"持仓时间不足({time_since_last:.1f}分钟)，保持原仓位")
                 return self.last_position
         else:
             should_change = True
@@ -438,6 +429,8 @@ class KalshiTrader(BasePredictor):
         """准备数据（BasePredictor抽象方法）"""
         # 保存df供后续使用
         self.cached_df = df
+        # 清空之前的sentiment缓存
+        self.cached_sentiment_data = None
         # Kalshi策略不需要生成图表，直接返回空
         return "", None
     
@@ -602,10 +595,17 @@ class KalshiTrader(BasePredictor):
         logger.info("=" * 60)
         
         return {
+            "symbol": self.symbol,
+            "strategy": "kalshi",
+            "timestamp": datetime.now().isoformat(),
             "position": float(prediction),
             "confidence": float(sentiment_data['confidence']),
             "reasoning": reasoning,
-            "chart_data": None
+            "action": self._get_action_description(prediction),
+            "chart_data": None,
+            # 添加交易所需的额外信息
+            "sentiment": sentiment_data,
+            "technical_indicators": result.get('technical_indicators', {})
         }
 
 
