@@ -17,53 +17,29 @@ logger = logging.getLogger(__name__)
 
 class OnChainFetcher:
     """
-    Fetch on-chain and derivatives data from multiple sources
+    Fetch on-chain and derivatives data from Binance
     
     Data sources:
     1. Binance API - Futures data (open interest, long/short ratio, taker buy/sell)
     2. CryptoQuant API - Exchange flows (optional, requires API key)
     3. Glassnode API - On-chain metrics (optional, requires API key)
     
-    Free tier data (no API key required):
+    Available data (no API key required):
     - Open Interest from Binance
     - Long/Short Ratio from Binance
     - Top Trader positions from Binance
     - Taker Buy/Sell Volume from Binance
-    
-    Authenticated data (optional):
-    - Liquidation orders (requires API keys in environment or config)
     """
     
-    def __init__(self, binance_base_url: str = "https://fapi.binance.com",
-                 account: str = None):
+    def __init__(self, binance_base_url: str = "https://fapi.binance.com"):
         """
         Initialize OnChain data fetcher
         
         Args:
             binance_base_url: Binance Futures API base URL
-            account: Optional account name for loading API credentials
-                    If provided, will enable authenticated liquidation data
         """
         self.binance_base = binance_base_url
-        self.account = account
         self.usdm_client = None
-        
-        # Try to initialize authenticated client if account provided
-        if account:
-            try:
-                import sys
-                if '/home/ubuntu/bcp' not in sys.path:
-                    sys.path.insert(0, '/home/ubuntu/bcp')
-                
-                from binance.fut.usdm import USDM
-                from binance.auth.utils import load_api_keys
-                
-                api_key, private_key = load_api_keys(account)
-                self.usdm_client = USDM(api_key=api_key, private_key=private_key)
-                logger.info(f"Authenticated USDM client initialized for account: {account}")
-            except Exception as e:
-                logger.warning(f"Failed to initialize authenticated client: {e}")
-                logger.info("Continuing with unauthenticated mode (liquidation data unavailable)")
         
         self.session = requests.Session()
         self.session.headers.update({
@@ -302,97 +278,7 @@ class OnChainFetcher:
             logger.error(f"Failed to fetch 24hr stats: {e}")
             return None
     
-    def fetch_liquidation_orders(self, symbol: str = "BTCUSDT", 
-                                start_time: Optional[int] = None,
-                                end_time: Optional[int] = None,
-                                limit: int = 100) -> Optional[List[Dict[str, Any]]]:
-        """
-        Fetch recent liquidation orders
-        
-        Two modes:
-        1. With USDM client (authenticated): Gets complete liquidation data
-        2. Without authentication: Returns empty list with warning
-        
-        Args:
-            symbol: Trading symbol
-            start_time: Start timestamp in milliseconds (optional)
-            end_time: End timestamp in milliseconds (optional)
-            limit: Number of liquidation records (max 1000)
-            
-        Returns:
-            List of liquidation data or empty list if unavailable
-        """
-        # Try authenticated method first if client available
-        if self.usdm_client:
-            try:
-                params = {"symbol": symbol, "limit": limit}
-                if start_time:
-                    params['startTime'] = start_time
-                if end_time:
-                    params['endTime'] = end_time
-                
-                # Use authenticated request - updated endpoint
-                # Old endpoint /fapi/v1/allForceOrders is deprecated
-                data = self.usdm_client.sign_request(
-                    "GET", 
-                    "/fapi/v1/forceOrders",
-                    params
-                )
-                
-                # Calculate liquidation statistics
-                if data:
-                    long_liq = sum(float(x['origQty']) for x in data if x['side'] == 'SELL')
-                    short_liq = sum(float(x['origQty']) for x in data if x['side'] == 'BUY')
-                    total_liq = long_liq + short_liq
-                    
-                    logger.info(f"Liquidations: Long={long_liq:.2f}, Short={short_liq:.2f}, "
-                              f"Total={total_liq:.2f} contracts")
-                
-                return data
-                
-            except Exception as e:
-                logger.debug(f"Authenticated liquidation fetch failed: {e}")
-                logger.debug("Falling back to unauthenticated attempt...")
-                # Fall through to unauthenticated method
-                pass
-        
-        # Try unauthenticated public endpoint
-        try:
-            # Updated endpoint - old /fapi/v1/allForceOrders is deprecated
-            url = f"{self.binance_base}/fapi/v1/forceOrders"
-            params = {"symbol": symbol}
-            
-            if start_time:
-                params['startTime'] = start_time
-            if end_time:
-                params['endTime'] = end_time
-            if limit:
-                params['limit'] = limit
-            
-            response = self.session.get(url, params=params, timeout=10)
-            
-            # If 400 error, likely means authentication required
-            if response.status_code == 400:
-                logger.debug("Liquidation data requires authentication, skipping...")
-                return []
-            
-            response.raise_for_status()
-            data = response.json()
-            
-            # Calculate liquidation statistics
-            if data:
-                long_liq = sum(float(x['origQty']) for x in data if x['side'] == 'SELL')
-                short_liq = sum(float(x['origQty']) for x in data if x['side'] == 'BUY')
-                total_liq = long_liq + short_liq
-                
-                logger.info(f"Liquidations: Long={long_liq:.2f}, Short={short_liq:.2f}, "
-                          f"Total={total_liq:.2f} contracts")
-            
-            return data
-            
-        except Exception as e:
-            logger.debug(f"Unauthenticated liquidation fetch failed (expected): {e}")
-            return []
+
     
     def fetch_all_metrics(self, symbol: str = "BTCUSDT", 
                          period: str = "5m", 
@@ -420,7 +306,6 @@ class OnChainFetcher:
             'taker_volume': None,
             'premium_index': None,
             '24hr_stats': None,
-            'liquidations': None,
         }
         
         # Fetch all metrics with small delays to avoid rate limits
@@ -451,9 +336,6 @@ class OnChainFetcher:
         time.sleep(0.2)
         
         metrics['24hr_stats'] = self.fetch_24hr_stats(symbol)
-        time.sleep(0.2)
-        
-        metrics['liquidations'] = self.fetch_liquidation_orders(symbol, 100)
         
         logger.info("On-chain metrics fetch completed")
         return metrics
@@ -467,15 +349,7 @@ class OnChainFetcher:
             
         Returns:
             Analysis result with signal strength
-            
-        Raises:
-            ValueError: If liquidation data is not available
         """
-        # Check if we have liquidation data (optional now)
-        has_liquidation = metrics.get('liquidations') and len(metrics['liquidations']) > 0
-        if not has_liquidation:
-            logger.warning("清算数据不可用，将使用替代指标进行分析")
-        
         analysis = {
             'bullish_signals': 0,
             'bearish_signals': 0,
@@ -626,28 +500,6 @@ class OnChainFetcher:
                     )
             else:
                 analysis['neutral_signals'] += 1
-        
-        # Analyze Liquidations (if available)
-        if has_liquidation and metrics['liquidations']:
-            liq_data = metrics['liquidations']
-            long_liq = sum(float(x['origQty']) for x in liq_data if x['side'] == 'SELL')
-            short_liq = sum(float(x['origQty']) for x in liq_data if x['side'] == 'BUY')
-            
-            if long_liq > short_liq * 2:
-                analysis['bearish_signals'] += 1
-                analysis['signal_details'].append(
-                    f"多头爆仓严重 (多单={long_liq:.0f}, 空单={short_liq:.0f})"
-                )
-            elif short_liq > long_liq * 2:
-                analysis['bullish_signals'] += 1
-                analysis['signal_details'].append(
-                    f"空头爆仓严重 (空单={short_liq:.0f}, 多单={long_liq:.0f})"
-                )
-            else:
-                analysis['neutral_signals'] += 1
-                analysis['signal_details'].append(
-                    f"爆仓平衡 (多单={long_liq:.0f}, 空单={short_liq:.0f})"
-                )
         
         # Determine overall sentiment
         total_signals = (analysis['bullish_signals'] + 

@@ -11,7 +11,6 @@ Data sources (all public, no authentication required):
 - Taker buy/sell volume
 - Premium index (mark price vs index price)
 - 24h trading statistics
-- Liquidation data (optional, requires --account parameter)
 """
 
 import logging
@@ -31,7 +30,6 @@ class OnChainTrader(BasePredictor):
     On-Chain Data Trading Strategy
     
     Uses public on-chain and derivatives market data from Binance.
-    Authentication (--account) is optional for additional liquidation data.
     
     Features:
     1. Fetch real-time on-chain and derivatives data from Binance
@@ -42,18 +40,17 @@ class OnChainTrader(BasePredictor):
        - Taker buy/sell volume ratio
        - Premium index (mark vs index price)
        - 24h trading volume and price change
-       - Liquidation data (optional - requires authentication)
     3. Combine on-chain signals with technical analysis
     4. Generate position signals based on sentiment
     
     Signal Generation:
-    - Bullish: High taker buy ratio, rising OI, negative premium, short liquidations
-    - Bearish: High taker sell ratio, falling OI, high premium, long liquidations
+    - Bullish: High taker buy ratio, rising OI, negative premium
+    - Bearish: High taker sell ratio, falling OI, high premium
     - Neutral: Mixed or weak signals
     """
     
     def __init__(self, symbol: str = "BTCUSDC", name: str = "onchain",
-                 config_path: Optional[str] = None, account: str = None):
+                 config_path: Optional[str] = None):
         """
         Initialize OnChain trader
         
@@ -61,20 +58,8 @@ class OnChainTrader(BasePredictor):
             symbol: Trading symbol (e.g., BTCUSDC)
             name: Strategy name
             config_path: Path to configuration file
-            account: Account name for optional authenticated liquidation data
-                    Without this, strategy will work with public data only
-                    With account, additional liquidation data will be included
-                    Example: 'your_account_name'
         """
         super().__init__(symbol, name)
-        
-        # Note: account parameter is optional now
-        if not account:
-            logger.info(
-                "ℹ️  OnChain策略运行在公开数据模式\n"
-                "   如需清算数据，请使用 --account 参数\n"
-                "   例如: python main.py --predictor onchain --account your_account_name"
-            )
         
         # Load configuration
         self.config = self._load_config(config_path)
@@ -82,8 +67,8 @@ class OnChainTrader(BasePredictor):
         # Use the symbol directly without conversion
         self.futures_symbol = symbol
         
-        # Initialize on-chain data fetcher with optional account for authentication
-        self.fetcher = OnChainFetcher(account=account)
+        # Initialize on-chain data fetcher
+        self.fetcher = OnChainFetcher()
         
         # Strategy parameters
         self.data_period = self.config.get('data_period', '1h')
@@ -94,8 +79,7 @@ class OnChainTrader(BasePredictor):
         self.weights = self.config.get('signal_weights', {
             'open_interest': 1.0,
             'long_short_ratio': 1.0,
-            'taker_volume': 1.5,
-            'liquidations': 1.2
+            'taker_volume': 1.5
         })
         
         logger.info(f"OnChain Trader initialized: {symbol} -> {self.futures_symbol}")
@@ -137,9 +121,6 @@ class OnChainTrader(BasePredictor):
             
         Returns:
             Analysis result with position signal
-            
-        Raises:
-            ValueError: If liquidation data is not available
         """
         logger.info("Fetching on-chain metrics...")
         
@@ -150,14 +131,7 @@ class OnChainTrader(BasePredictor):
             history_limit=self.history_limit
         )
         
-        # Check liquidation data availability (now optional)
-        has_liquidation = metrics.get('liquidations') and len(metrics['liquidations']) > 0
-        if has_liquidation:
-            logger.info(f"清算数据已获取: {len(metrics['liquidations'])} 条记录")
-        else:
-            logger.warning("清算数据不可用，将使用其他指标进行分析")
-        
-        # Analyze metrics (will also validate liquidation data)
+        # Analyze metrics
         onchain_analysis = self.fetcher.analyze_metrics(metrics)
         
         # Get technical analysis sentiment from stats
@@ -254,6 +228,10 @@ class OnChainTrader(BasePredictor):
         Returns:
             Combined analysis with final position signal (-1.0 to 1.0)
         """
+        logger.info("=" * 60)
+        logger.info("📊 OnChain信号组合计算过程")
+        logger.info("=" * 60)
+        
         # Map sentiments to numeric values
         sentiment_map = {
             'BULLISH': 1,
@@ -264,16 +242,33 @@ class OnChainTrader(BasePredictor):
         onchain_score = sentiment_map.get(onchain_analysis['overall_sentiment'], 0)
         tech_score = sentiment_map.get(tech_sentiment['direction'], 0)
         
+        logger.info(f"链上情绪: {onchain_analysis['overall_sentiment']} → 得分: {onchain_score:+d}")
+        logger.info(f"技术情绪: {tech_sentiment['direction']} → 得分: {tech_score:+d}")
+        logger.info("")
+        
         # Weighted average (on-chain 60%, technical 40%)
         combined_score = (onchain_score * 0.6 + tech_score * 0.4)
+        logger.info(f"综合评分计算:")
+        logger.info(f"  链上得分: {onchain_score:+d} × 0.6 = {onchain_score * 0.6:+.2f}")
+        logger.info(f"  技术得分: {tech_score:+d} × 0.4 = {tech_score * 0.4:+.2f}")
+        logger.info(f"  综合得分: {combined_score:+.2f}")
+        logger.info("")
         
         # Calculate confidence
         onchain_conf = onchain_analysis.get('confidence', 0.5)
         tech_conf = tech_sentiment.get('strength', 0.5)
         combined_confidence = (onchain_conf * 0.6 + tech_conf * 0.4)
         
+        logger.info(f"置信度计算:")
+        logger.info(f"  链上置信度: {onchain_conf:.2f} × 0.6 = {onchain_conf * 0.6:.2f}")
+        logger.info(f"  技术置信度: {tech_conf:.2f} × 0.4 = {tech_conf * 0.4:.2f}")
+        logger.info(f"  综合置信度: {combined_confidence:.2f}")
+        logger.info("")
+        
         # Calculate position size from -1.0 to 1.0 (similar to quant.py)
         position_size = self._calculate_position_size(combined_score, combined_confidence)
+        logger.info(f"仓位大小计算: {combined_score:+.2f} × 置信度系数 = {position_size:+.2f}")
+        logger.info("")
         
         # Determine position direction based on position_size
         if position_size > 0.1:
@@ -282,6 +277,9 @@ class OnChainTrader(BasePredictor):
             position = 'SHORT'
         else:
             position = 'NEUTRAL'
+        
+        logger.info(f"最终仓位方向: {position}")
+        logger.info("=" * 60)
         
         return {
             'position': position,
@@ -330,6 +328,8 @@ class OnChainTrader(BasePredictor):
             scale = 0.7   # Low confidence - 30% discount
         else:
             scale = 0.5   # Very low confidence - 50% discount (not zero!)
+        
+        logger.info(f"置信度分层: {confidence:.2f} → 系数: {scale:.1f}")
         
         position_size = combined_score * scale
         return round(position_size, 2)
