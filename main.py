@@ -212,7 +212,6 @@ def _create_predictor(args):
             symbol=args.symbol,
             name=args.name,
             config_path=args.onchain_config,
-            account=args.account
         )
     else:  # llm
         return PositionAdvisor(

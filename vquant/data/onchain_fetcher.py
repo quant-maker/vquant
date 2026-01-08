@@ -310,33 +310,20 @@ class OnChainFetcher:
         
         # Fetch all metrics with small delays to avoid rate limits
         metrics['open_interest'] = self.fetch_open_interest(symbol)
-        time.sleep(0.2)
-        
         metrics['open_interest_history'] = self.fetch_open_interest_history(
             symbol, period, history_limit
         )
-        time.sleep(0.2)
-        
         metrics['long_short_ratio'] = self.fetch_long_short_ratio(
             symbol, period, history_limit
         )
-        time.sleep(0.2)
-        
         metrics['global_long_short_ratio'] = self.fetch_global_long_short_ratio(
             symbol, period, history_limit
         )
-        time.sleep(0.2)
-        
         metrics['taker_volume'] = self.fetch_taker_buy_sell_volume(
             symbol, period, history_limit
         )
-        time.sleep(0.2)
-        
         metrics['premium_index'] = self.fetch_premium_index(symbol)
-        time.sleep(0.2)
-        
         metrics['24hr_stats'] = self.fetch_24hr_stats(symbol)
-        
         logger.info("On-chain metrics fetch completed")
         return metrics
     
