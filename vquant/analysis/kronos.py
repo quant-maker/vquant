@@ -52,7 +52,7 @@ class KronosTrader(BasePredictor):
         
         # Initialize scraper
         max_staleness = self.config.get('max_staleness_hours', 24)
-        kronos_url = self.config.get('kronos_url', 'https://shiyu-coder.github.io/Kronos-demos/')
+        kronos_url = self.config.get('kronos_url', 'https://shiyu-coder.github.io/Kronos-demo/')
         fetch_timeout = self.config.get('fetch_timeout_minutes', 30)
         max_retries = self.config.get('max_retries', 3)
         
@@ -104,7 +104,7 @@ class KronosTrader(BasePredictor):
             'use_json_fallback': True,  # Use JSON history for fallback
             'json_history_dir': 'charts',  # Directory for JSON history
             'json_max_age_minutes': 700,  # Maximum age of JSON to use for fallback (with buffer for edge cases)
-            'kronos_url': 'https://shiyu-coder.github.io/Kronos-demos/',
+            'kronos_url': 'https://shiyu-coder.github.io/Kronos-demo/',
             'confidence_threshold': 0.5,  # Minimum confidence for trading
             'position_multiplier': 1.0,   # Position size multiplier (0-1)
             'enable_safety_check': True,  # Enable data freshness check
