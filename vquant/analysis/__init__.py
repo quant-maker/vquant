@@ -10,6 +10,8 @@ from .quant import QuantPredictor
 from .martin import MartinTrader
 from .kelly import KellyTrader
 from .advisor import PositionAdvisor
+from .kronos import KronosTrader
+from .kronos_quant import KronosQuantTrader
 
 __all__ = [
     'BasePredictor',
@@ -17,4 +19,6 @@ __all__ = [
     'MartinTrader',
     'KellyTrader',
     'PositionAdvisor',
+    'KronosTrader',
+    'KronosQuantTrader',
 ]
