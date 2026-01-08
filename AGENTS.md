@@ -4,7 +4,7 @@ This file contains essential information for AI coding agents working on this qu
 
 ## Project Overview
 
-**VQuant** is a Python-based quantitative trading system that uses 1-minute market data as the foundation and dynamically aggregates to other timeframes (1h, 4h, 1d). It supports multiple trading strategies (Quant, Kelly, Martingale, Kalshi, Kronos) with AI-powered analysis.
+**VQuant** is a Python-based quantitative trading system that uses 1-minute market data as the foundation and dynamically aggregates to other timeframes (1h, 4h, 1d). It supports multiple trading strategies (Quant, Kelly, Martingale, Kalshi, Kronos, OnChain) with AI-powered analysis.
 
 **Key Technologies:**
 - Python 3.11+

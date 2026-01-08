@@ -21,7 +21,7 @@ from vquant.analysis.martin import MartinTrader
 from vquant.analysis.kelly import KellyTrader
 from vquant.analysis.kalshi import KalshiTrader
 from vquant.analysis.kronos import KronosTrader
-from vquant.analysis.kronos_quant import KronosQuantTrader
+from vquant.analysis.onchain import OnChainTrader
 
 
 # 配置日志
@@ -206,11 +206,13 @@ def _create_predictor(args):
             name=args.name,
             config_path=args.kronos_config
         )
-    elif args.predictor == "kronos_quant":
-        return KronosQuantTrader(
+    elif args.predictor == "onchain":
+        # Always pass account for authenticated liquidation data (analysis only, no trading)
+        return OnChainTrader(
             symbol=args.symbol,
             name=args.name,
-            config_path=args.kronos_config
+            config_path=args.onchain_config,
+            account=args.account
         )
     else:  # llm
         return PositionAdvisor(
@@ -248,12 +250,12 @@ def parse_arguments():
         "-p",
         type=str,
         default="llm",
-        choices=["llm", "quant", "martin", "kelly", "kalshi", "kronos", "kronos_quant"],
+        choices=["llm", "quant", "martin", "kelly", "kalshi", "kronos", "onchain"],
         help="Analysis method: 'llm' for AI advisor (default), 'quant' for quantitative predictor, "
              "'martin' for martingale trader, 'kelly' for Kelly Criterion trader, "
              "'kalshi' for Kalshi prediction market based trader, "
              "'kronos' for Kronos official prediction based trader, "
-             "'kronos_quant' for Kronos with quantized position sizing",
+             "'onchain' for on-chain and derivatives data based trader",
     )
     # AI service configuration
     parser.add_argument(
@@ -292,8 +294,14 @@ def parse_arguments():
         "--kronos-config",
         type=str,
         default="config/kronos_strategy.json",
-        help="Kronos strategy configuration file path (default: config/kronos_strategy.json). "
-             "For kronos_quant predictor, use config/kronos_quant_strategy.json",
+        help="Kronos strategy configuration file path (default: config/kronos_strategy.json)",
+    )
+    # OnChain strategy parameters
+    parser.add_argument(
+        "--onchain-config",
+        type=str,
+        default="config/onchain_strategy.json",
+        help="OnChain strategy configuration file path (default: config/onchain_strategy.json)",
     )
     # Trading parameters
     parser.add_argument(
