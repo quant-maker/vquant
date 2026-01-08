@@ -203,6 +203,105 @@ class OnChainFetcher:
             logger.error(f"Failed to fetch taker volume: {e}")
             return None
     
+    def fetch_global_long_short_ratio(self, symbol: str = "BTCUSDT",
+                                     period: str = "5m",
+                                     limit: int = 30) -> Optional[List[Dict[str, Any]]]:
+        """
+        Fetch global long/short account ratio (all users)
+        
+        Args:
+            symbol: Trading symbol
+            period: Time period (5m, 15m, 30m, 1h, 2h, 4h, 6h, 12h, 1d)
+            limit: Number of data points (max 500)
+            
+        Returns:
+            List of global long/short ratio data
+        """
+        try:
+            url = f"{self.binance_base}/futures/data/globalLongShortAccountRatio"
+            params = {
+                "symbol": symbol,
+                "period": period,
+                "limit": limit
+            }
+            
+            response = self.session.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data:
+                latest = data[-1]
+                logger.info(f"Global Long/Short Ratio: {float(latest['longShortRatio']):.4f} "
+                          f"(Long: {float(latest['longAccount']):.2%}, "
+                          f"Short: {float(latest['shortAccount']):.2%})")
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch global long/short ratio: {e}")
+            return None
+    
+    def fetch_premium_index(self, symbol: str = "BTCUSDT") -> Optional[Dict[str, Any]]:
+        """
+        Fetch premium index (mark price, index price, funding rate)
+        
+        Args:
+            symbol: Trading symbol
+            
+        Returns:
+            Premium index data or None on failure
+        """
+        try:
+            url = f"{self.binance_base}/fapi/v1/premiumIndex"
+            params = {"symbol": symbol}
+            
+            response = self.session.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data:
+                mark_price = float(data['markPrice'])
+                index_price = float(data['indexPrice'])
+                premium = (mark_price - index_price) / index_price * 100
+                
+                logger.info(f"Premium: {premium:.4f}% (Mark: {mark_price:.2f}, Index: {index_price:.2f})")
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch premium index: {e}")
+            return None
+    
+    def fetch_24hr_stats(self, symbol: str = "BTCUSDT") -> Optional[Dict[str, Any]]:
+        """
+        Fetch 24hr ticker statistics
+        
+        Args:
+            symbol: Trading symbol
+            
+        Returns:
+            24hr stats or None on failure
+        """
+        try:
+            url = f"{self.binance_base}/fapi/v1/ticker/24hr"
+            params = {"symbol": symbol}
+            
+            response = self.session.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data:
+                volume = float(data['volume'])
+                price_change_pct = float(data['priceChangePercent'])
+                
+                logger.info(f"24h Volume: {volume:.2f}, Price Change: {price_change_pct:.2f}%")
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch 24hr stats: {e}")
+            return None
+    
     def fetch_liquidation_orders(self, symbol: str = "BTCUSDT", 
                                 start_time: Optional[int] = None,
                                 end_time: Optional[int] = None,
@@ -317,7 +416,10 @@ class OnChainFetcher:
             'open_interest': None,
             'open_interest_history': None,
             'long_short_ratio': None,
+            'global_long_short_ratio': None,
             'taker_volume': None,
+            'premium_index': None,
+            '24hr_stats': None,
             'liquidations': None,
         }
         
@@ -335,9 +437,20 @@ class OnChainFetcher:
         )
         time.sleep(0.2)
         
+        metrics['global_long_short_ratio'] = self.fetch_global_long_short_ratio(
+            symbol, period, history_limit
+        )
+        time.sleep(0.2)
+        
         metrics['taker_volume'] = self.fetch_taker_buy_sell_volume(
             symbol, period, history_limit
         )
+        time.sleep(0.2)
+        
+        metrics['premium_index'] = self.fetch_premium_index(symbol)
+        time.sleep(0.2)
+        
+        metrics['24hr_stats'] = self.fetch_24hr_stats(symbol)
         time.sleep(0.2)
         
         metrics['liquidations'] = self.fetch_liquidation_orders(symbol, 100)
@@ -358,16 +471,10 @@ class OnChainFetcher:
         Raises:
             ValueError: If liquidation data is not available
         """
-        # Require liquidation data
-        if not metrics.get('liquidations') or len(metrics['liquidations']) == 0:
-            error_msg = (
-                "清算数据不可用。OnChain策略必须要有清算数据才能运行。\n"
-                "请使用 --account 参数提供认证账户以获取清算数据。\n"
-                "例如: python main.py --predictor onchain --account your_account_name"
-            )
-            logger.error(error_msg)
-            raise ValueError("Liquidation data is required for OnChain strategy. "
-                           "Please provide --account parameter for authentication.")
+        # Check if we have liquidation data (optional now)
+        has_liquidation = metrics.get('liquidations') and len(metrics['liquidations']) > 0
+        if not has_liquidation:
+            logger.warning("清算数据不可用，将使用替代指标进行分析")
         
         analysis = {
             'bullish_signals': 0,
@@ -447,28 +554,100 @@ class OnChainFetcher:
                 else:
                     analysis['neutral_signals'] += 1
         
-        # Analyze Liquidations (required)
-        # This check is redundant since we already checked at the beginning,
-        # but kept for safety
-        liq_data = metrics['liquidations']
-        long_liq = sum(float(x['origQty']) for x in liq_data if x['side'] == 'SELL')
-        short_liq = sum(float(x['origQty']) for x in liq_data if x['side'] == 'BUY')
+        # Analyze Global Long/Short Ratio (all users)
+        if metrics.get('global_long_short_ratio'):
+            global_ls_data = metrics['global_long_short_ratio']
+            if global_ls_data:
+                latest_global_ls = float(global_ls_data[-1]['longShortRatio'])
+                
+                if latest_global_ls > 3.0:
+                    analysis['bearish_signals'] += 1
+                    analysis['signal_details'].append(
+                        f"全市场多空比极高 {latest_global_ls:.2f} (极度看多，反向指标)"
+                    )
+                elif latest_global_ls < 0.5:
+                    analysis['bullish_signals'] += 1
+                    analysis['signal_details'].append(
+                        f"全市场多空比极低 {latest_global_ls:.2f} (极度看空，反向指标)"
+                    )
+                elif latest_global_ls > 1.5:
+                    analysis['bearish_signals'] += 1
+                    analysis['signal_details'].append(
+                        f"全市场偏多 {latest_global_ls:.2f} (散户看多)"
+                    )
+                elif latest_global_ls < 0.8:
+                    analysis['bullish_signals'] += 1
+                    analysis['signal_details'].append(
+                        f"全市场偏空 {latest_global_ls:.2f} (散户看空)"
+                    )
+                else:
+                    analysis['neutral_signals'] += 1
         
-        if long_liq > short_liq * 2:
-            analysis['bearish_signals'] += 1
-            analysis['signal_details'].append(
-                f"多头爆仓严重 (多单={long_liq:.0f}, 空单={short_liq:.0f})"
-            )
-        elif short_liq > long_liq * 2:
-            analysis['bullish_signals'] += 1
-            analysis['signal_details'].append(
-                f"空头爆仓严重 (空单={short_liq:.0f}, 多单={long_liq:.0f})"
-            )
-        else:
-            analysis['neutral_signals'] += 1
-            analysis['signal_details'].append(
-                f"爆仓平衡 (多单={long_liq:.0f}, 空单={short_liq:.0f})"
-            )
+        # Analyze Premium Index
+        if metrics.get('premium_index'):
+            premium_data = metrics['premium_index']
+            mark_price = float(premium_data['markPrice'])
+            index_price = float(premium_data['indexPrice'])
+            premium = (mark_price - index_price) / index_price * 100
+            
+            if premium > 0.5:
+                analysis['bearish_signals'] += 1
+                analysis['signal_details'].append(
+                    f"合约溢价过高 {premium:.3f}% (市场过热)"
+                )
+            elif premium < -0.5:
+                analysis['bullish_signals'] += 1
+                analysis['signal_details'].append(
+                    f"合约折价 {premium:.3f}% (市场恐慌)"
+                )
+            else:
+                analysis['neutral_signals'] += 1
+                analysis['signal_details'].append(
+                    f"合约溢价正常 {premium:.3f}%"
+                )
+        
+        # Analyze 24hr Volume and Price Change
+        if metrics.get('24hr_stats'):
+            stats_24h = metrics['24hr_stats']
+            price_change_pct = float(stats_24h['priceChangePercent'])
+            volume = float(stats_24h['volume'])
+            
+            # Price momentum
+            if abs(price_change_pct) > 5:
+                if price_change_pct > 0:
+                    analysis['bullish_signals'] += 1
+                    analysis['signal_details'].append(
+                        f"24h强势上涨 {price_change_pct:.2f}%"
+                    )
+                else:
+                    analysis['bearish_signals'] += 1
+                    analysis['signal_details'].append(
+                        f"24h大幅下跌 {price_change_pct:.2f}%"
+                    )
+            else:
+                analysis['neutral_signals'] += 1
+        
+        # Analyze Liquidations (if available)
+        if has_liquidation and metrics['liquidations']:
+            liq_data = metrics['liquidations']
+            long_liq = sum(float(x['origQty']) for x in liq_data if x['side'] == 'SELL')
+            short_liq = sum(float(x['origQty']) for x in liq_data if x['side'] == 'BUY')
+            
+            if long_liq > short_liq * 2:
+                analysis['bearish_signals'] += 1
+                analysis['signal_details'].append(
+                    f"多头爆仓严重 (多单={long_liq:.0f}, 空单={short_liq:.0f})"
+                )
+            elif short_liq > long_liq * 2:
+                analysis['bullish_signals'] += 1
+                analysis['signal_details'].append(
+                    f"空头爆仓严重 (空单={short_liq:.0f}, 多单={long_liq:.0f})"
+                )
+            else:
+                analysis['neutral_signals'] += 1
+                analysis['signal_details'].append(
+                    f"爆仓平衡 (多单={long_liq:.0f}, 空单={short_liq:.0f})"
+                )
         
         # Determine overall sentiment
         total_signals = (analysis['bullish_signals'] + 

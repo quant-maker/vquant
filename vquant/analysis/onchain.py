@@ -5,9 +5,13 @@
 OnChain Trader - Trading strategy based on on-chain and derivatives data
 Analyzes multiple on-chain metrics to generate trading signals
 
-IMPORTANT: This strategy REQUIRES liquidation data which needs authentication.
-You must provide --account parameter when running this strategy.
-Example: python main.py --predictor onchain --account your_account_name
+Data sources (all public, no authentication required):
+- Open Interest (OI) changes
+- Long/Short ratios (top traders and global)
+- Taker buy/sell volume
+- Premium index (mark price vs index price)
+- 24h trading statistics
+- Liquidation data (optional, requires --account parameter)
 """
 
 import logging
@@ -26,23 +30,25 @@ class OnChainTrader(BasePredictor):
     """
     On-Chain Data Trading Strategy
     
-    IMPORTANT: This strategy REQUIRES liquidation data and authentication.
-    You MUST provide --account parameter when using this strategy.
-    Example: python main.py --predictor onchain --account your_account_name
+    Uses public on-chain and derivatives market data from Binance.
+    Authentication (--account) is optional for additional liquidation data.
     
     Features:
     1. Fetch real-time on-chain and derivatives data from Binance
     2. Analyze multiple metrics:
        - Open Interest changes
        - Long/Short ratio (top traders)
+       - Global Long/Short ratio (all users)
        - Taker buy/sell volume ratio
-       - Liquidation data (REQUIRED - needs authentication)
+       - Premium index (mark vs index price)
+       - 24h trading volume and price change
+       - Liquidation data (optional - requires authentication)
     3. Combine on-chain signals with technical analysis
     4. Generate position signals based on sentiment
     
     Signal Generation:
-    - Bullish: High taker buy ratio, rising OI, short liquidations
-    - Bearish: High taker sell ratio, falling OI, long liquidations
+    - Bullish: High taker buy ratio, rising OI, negative premium, short liquidations
+    - Bearish: High taker sell ratio, falling OI, high premium, long liquidations
     - Neutral: Mixed or weak signals
     """
     
@@ -55,19 +61,18 @@ class OnChainTrader(BasePredictor):
             symbol: Trading symbol (e.g., BTCUSDC)
             name: Strategy name
             config_path: Path to configuration file
-            account: Account name for authenticated liquidation data (REQUIRED)
-                    Without this, the strategy will fail when trying to fetch
-                    liquidation data. Example: 'your_account_name'
-        
-        Raises:
-            Warning: If account is not provided, strategy will fail during analysis
+            account: Account name for optional authenticated liquidation data
+                    Without this, strategy will work with public data only
+                    With account, additional liquidation data will be included
+                    Example: 'your_account_name'
         """
         super().__init__(symbol, name)
         
+        # Note: account parameter is optional now
         if not account:
-            logger.warning(
-                "⚠️  OnChain策略需要认证账户才能获取清算数据！\n"
-                "   请使用 --account 参数提供账户名称\n"
+            logger.info(
+                "ℹ️  OnChain策略运行在公开数据模式\n"
+                "   如需清算数据，请使用 --account 参数\n"
                 "   例如: python main.py --predictor onchain --account your_account_name"
             )
         
@@ -149,20 +154,12 @@ class OnChainTrader(BasePredictor):
             history_limit=self.history_limit
         )
         
-        # Validate liquidation data availability
-        if not metrics.get('liquidations') or len(metrics['liquidations']) == 0:
-            error_msg = (
-                "\n清算数据不可用！OnChain策略必须要有清算数据才能运行。\n"
-                "请使用 --account 参数提供认证账户以获取清算数据。\n"
-                "例如: python main.py --predictor onchain --account your_account_name\n"
-            )
-            logger.error(error_msg)
-            raise ValueError(
-                "Liquidation data is required for OnChain strategy. "
-                "Please provide --account parameter for authentication."
-            )
-        
-        logger.info(f"清算数据已获取: {len(metrics['liquidations'])} 条记录")
+        # Check liquidation data availability (now optional)
+        has_liquidation = metrics.get('liquidations') and len(metrics['liquidations']) > 0
+        if has_liquidation:
+            logger.info(f"清算数据已获取: {len(metrics['liquidations'])} 条记录")
+        else:
+            logger.warning("清算数据不可用，将使用其他指标进行分析")
         
         # Analyze metrics (will also validate liquidation data)
         onchain_analysis = self.fetcher.analyze_metrics(metrics)
