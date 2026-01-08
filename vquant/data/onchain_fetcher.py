@@ -69,20 +69,6 @@ class OnChainFetcher:
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
         })
-        
-        # Try to initialize authenticated client for liquidation data
-        self.usdm_client = None
-        if account:
-            try:
-                from binance.fut.usdm import USDM
-                from binance.auth.utils import load_api_keys
-                
-                api_key, private_key = load_api_keys(account)
-                self.usdm_client = USDM(api_key=api_key, private_key=private_key)
-                logger.info(f"Authenticated USDM client initialized for account: {account}")
-            except Exception as e:
-                logger.warning(f"Failed to initialize USDM client: {e}. Liquidation data will be unavailable.")
-                self.usdm_client = None
     
     def fetch_open_interest(self, symbol: str = "BTCUSDT") -> Optional[Dict[str, Any]]:
         """
@@ -364,7 +350,21 @@ class OnChainFetcher:
             
         Returns:
             Analysis result with signal strength
+            
+        Raises:
+            ValueError: If liquidation data is not available
         """
+        # Require liquidation data
+        if not metrics.get('liquidations') or len(metrics['liquidations']) == 0:
+            error_msg = (
+                "清算数据不可用。OnChain策略必须要有清算数据才能运行。\n"
+                "请使用 --account 参数提供认证账户以获取清算数据。\n"
+                "例如: python main.py --predictor onchain --account your_account_name"
+            )
+            logger.error(error_msg)
+            raise ValueError("Liquidation data is required for OnChain strategy. "
+                           "Please provide --account parameter for authentication.")
+        
         analysis = {
             'bullish_signals': 0,
             'bearish_signals': 0,
@@ -443,27 +443,28 @@ class OnChainFetcher:
                 else:
                     analysis['neutral_signals'] += 1
         
-        # Analyze Liquidations (optional, may not be available)
-        if metrics['liquidations'] and len(metrics['liquidations']) > 0:
-            liq_data = metrics['liquidations']
-            long_liq = sum(float(x['origQty']) for x in liq_data if x['side'] == 'SELL')
-            short_liq = sum(float(x['origQty']) for x in liq_data if x['side'] == 'BUY')
-            
-            if long_liq > short_liq * 2:
-                analysis['bearish_signals'] += 1
-                analysis['signal_details'].append(
-                    f"多头爆仓严重 (多单={long_liq:.0f}, 空单={short_liq:.0f})"
-                )
-            elif short_liq > long_liq * 2:
-                analysis['bullish_signals'] += 1
-                analysis['signal_details'].append(
-                    f"空头爆仓严重 (空单={short_liq:.0f}, 多单={long_liq:.0f})"
-                )
-            else:
-                analysis['neutral_signals'] += 1
+        # Analyze Liquidations (required)
+        # This check is redundant since we already checked at the beginning,
+        # but kept for safety
+        liq_data = metrics['liquidations']
+        long_liq = sum(float(x['origQty']) for x in liq_data if x['side'] == 'SELL')
+        short_liq = sum(float(x['origQty']) for x in liq_data if x['side'] == 'BUY')
+        
+        if long_liq > short_liq * 2:
+            analysis['bearish_signals'] += 1
+            analysis['signal_details'].append(
+                f"多头爆仓严重 (多单={long_liq:.0f}, 空单={short_liq:.0f})"
+            )
+        elif short_liq > long_liq * 2:
+            analysis['bullish_signals'] += 1
+            analysis['signal_details'].append(
+                f"空头爆仓严重 (空单={short_liq:.0f}, 多单={long_liq:.0f})"
+            )
         else:
-            # Liquidation data not available
-            logger.debug("Liquidation data not available, skipping analysis")
+            analysis['neutral_signals'] += 1
+            analysis['signal_details'].append(
+                f"爆仓平衡 (多单={long_liq:.0f}, 空单={short_liq:.0f})"
+            )
         
         # Determine overall sentiment
         total_signals = (analysis['bullish_signals'] + 
