@@ -20,6 +20,7 @@ from vquant.analysis.quant import QuantPredictor
 from vquant.analysis.martin import MartinTrader
 from vquant.analysis.kelly import KellyTrader
 from vquant.analysis.kalshi import KalshiTrader
+from vquant.analysis.kronos import KronosTrader
 
 
 # 配置日志
@@ -198,6 +199,12 @@ def _create_predictor(args):
             password=args.kalshi_password,
             config_path=args.kalshi_config
         )
+    elif args.predictor == "kronos":
+        return KronosTrader(
+            symbol=args.symbol,
+            name=args.name,
+            config_path=args.kronos_config
+        )
     else:  # llm
         return PositionAdvisor(
             symbol=args.symbol,
@@ -234,10 +241,11 @@ def parse_arguments():
         "-p",
         type=str,
         default="llm",
-        choices=["llm", "quant", "martin", "kelly", "kalshi"],
+        choices=["llm", "quant", "martin", "kelly", "kalshi", "kronos"],
         help="Analysis method: 'llm' for AI advisor (default), 'quant' for quantitative predictor, "
              "'martin' for martingale trader, 'kelly' for Kelly Criterion trader, "
-             "'kalshi' for Kalshi prediction market based trader",
+             "'kalshi' for Kalshi prediction market based trader, "
+             "'kronos' for Kronos official prediction based trader",
     )
     # AI service configuration
     parser.add_argument(
@@ -270,6 +278,13 @@ def parse_arguments():
         type=str,
         default="config/kalshi_strategy.json",
         help="Kalshi strategy configuration file path (default: config/kalshi_strategy.json)",
+    )
+    # Kronos strategy parameters
+    parser.add_argument(
+        "--kronos-config",
+        type=str,
+        default="config/kronos_strategy.json",
+        help="Kronos strategy configuration file path (default: config/kronos_strategy.json)",
     )
     # Trading parameters
     parser.add_argument(

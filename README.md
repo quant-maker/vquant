@@ -130,6 +130,12 @@ python -m vquant.data.prefetch                  # 批量预拉取
 python -m vquant.model.train --help            # 训练帮助
 python -m vquant.model.train --symbol BTCUSDC  # 训练BTCUSDC
 
+# 策略运行
+python main.py --help                          # 查看所有策略选项
+python main.py --predictor quant --name my_quant  # 量化策略
+python main.py --predictor kelly --name my_kelly  # Kelly策略
+python main.py --predictor kronos --name my_kronos  # Kronos策略（基于官方预测）
+
 # 示例脚本
 python -m vquant.data.example                  # resample示例
 
@@ -138,6 +144,35 @@ pytest                                          # 运行所有测试
 pytest -m "not slow"                           # 快速测试
 pytest tests/test_resample.py -v              # 特定测试
 ```
+
+## 策略说明
+
+### Kronos策略
+
+**基于Kronos官方预测的交易策略**
+
+由于Kronos模型需要大量计算资源，该策略通过爬取官方网站的预测结果来生成交易信号。
+
+特点：
+- 自动爬取 https://shiyu-coder.github.io/Kronos-demos/ 的BTC/USDT预测
+- **内置数据新鲜度检测**，避免官方停止更新后继续交易
+- 支持配置最大数据陈旧时间（默认24小时）
+- 自动阻止使用过时数据进行交易
+
+快速开始：
+```bash
+# 安装依赖
+pip install beautifulsoup4
+
+# 运行策略（仅分析）
+python main.py --predictor kronos --name kronos_test --symbol BTCUSDC --interval 1h
+
+# 启用交易
+python main.py --predictor kronos --name kronos_live --symbol BTCUSDC --interval 1h --trade
+```
+
+详细文档：[docs/kronos_strategy.md](docs/kronos_strategy.md)
+
 
 ## API限流说明
 

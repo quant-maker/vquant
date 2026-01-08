@@ -4,6 +4,7 @@ matplotlib
 mplfinance
 Pillow  # 图片处理和优化
 scikit-learn  # ML模型（Kelly策略）
+beautifulsoup4  # HTML解析（Kronos策略）
 # 国内AI服务API依赖
 dashscope  # 阿里云通义千问
 openai  # OpenAI/智谱GLM通用
