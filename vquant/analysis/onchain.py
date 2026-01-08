@@ -256,7 +256,7 @@ class OnChainTrader(BasePredictor):
             tech_sentiment: Technical analysis sentiment
             
         Returns:
-            Combined analysis with final position signal
+            Combined analysis with final position signal (-1.0 to 1.0)
         """
         # Map sentiments to numeric values
         sentiment_map = {
@@ -276,16 +276,16 @@ class OnChainTrader(BasePredictor):
         tech_conf = tech_sentiment.get('strength', 0.5)
         combined_confidence = (onchain_conf * 0.6 + tech_conf * 0.4)
         
-        # Determine final position
-        if combined_score > 0.3 and combined_confidence >= self.min_confidence:
+        # Calculate position size from -1.0 to 1.0 (similar to quant.py)
+        position_size = self._calculate_position_size(combined_score, combined_confidence)
+        
+        # Determine position direction based on position_size
+        if position_size > 0.1:
             position = 'LONG'
-            position_size = self._calculate_position_size(combined_confidence)
-        elif combined_score < -0.3 and combined_confidence >= self.min_confidence:
+        elif position_size < -0.1:
             position = 'SHORT'
-            position_size = self._calculate_position_size(combined_confidence)
         else:
             position = 'NEUTRAL'
-            position_size = 0.0
         
         return {
             'position': position,
@@ -296,19 +296,33 @@ class OnChainTrader(BasePredictor):
             'tech_sentiment': tech_sentiment['direction']
         }
     
-    def _calculate_position_size(self, confidence: float) -> float:
+    def _calculate_position_size(self, combined_score: float, confidence: float) -> float:
         """
-        Calculate position size based on confidence level
+        Calculate position size from -1.0 to 1.0 based on score and confidence
         
         Args:
+            combined_score: Combined sentiment score (-1 to 1)
             confidence: Confidence level (0-1)
             
         Returns:
-            Position size as fraction of max position
+            Position size from -1.0 (full short) to 1.0 (full long)
         """
-        # Linear scaling between min and max position
-        position_range = self.max_position - self.min_position
-        position_size = self.min_position + (confidence * position_range)
+        # Base position from combined score
+        base_position = combined_score
+        
+        # Scale by confidence (only if above minimum threshold)
+        if confidence < self.min_confidence:
+            return 0.0  # Not confident enough, no position
+        
+        # Scale position by confidence level
+        # Map confidence [min_confidence, 1.0] to scale [min_position, max_position]
+        confidence_range = 1.0 - self.min_confidence
+        confidence_normalized = (confidence - self.min_confidence) / confidence_range
+        scale = self.min_position + (confidence_normalized * (self.max_position - self.min_position))
+        
+        # Apply scale to base position
+        position_size = base_position * scale
+        
         return round(position_size, 2)
     
     def generate_output(self, result: Dict[str, Any], 
