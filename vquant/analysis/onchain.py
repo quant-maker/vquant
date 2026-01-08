@@ -90,10 +90,6 @@ class OnChainTrader(BasePredictor):
         self.history_limit = self.config.get('history_limit', 24)
         self.min_confidence = self.config.get('min_confidence', 0.6)
         
-        # Position sizing
-        self.max_position = self.config.get('max_position', 1.0)
-        self.min_position = self.config.get('min_position', 0.3)
-        
         # Signal weights
         self.weights = self.config.get('signal_weights', {
             'open_interest': 1.0,
@@ -298,7 +294,16 @@ class OnChainTrader(BasePredictor):
     
     def _calculate_position_size(self, combined_score: float, confidence: float) -> float:
         """
-        Calculate position size from -1.0 to 1.0 based on score and confidence
+        Calculate position size from -1.0 to 1.0 based on score and confidence tiers
+        
+        Uses tiered confidence scaling to avoid abrupt position changes:
+        - High confidence (>0.8): Full position (scale=1.0)
+        - Good confidence (>0.6): Minor discount (scale=0.9)
+        - Medium confidence (>0.4): Moderate discount (scale=0.8)
+        - Low confidence (>0.2): Larger discount (scale=0.7)
+        - Very low confidence (≤0.2): Heavy discount (scale=0.5)
+        
+        This prevents frequent opening/closing due to confidence fluctuations.
         
         Args:
             combined_score: Combined sentiment score (-1 to 1)
@@ -306,23 +311,27 @@ class OnChainTrader(BasePredictor):
             
         Returns:
             Position size from -1.0 (full short) to 1.0 (full long)
+            
+        Examples:
+            score=0.8, conf=0.9  → pos=0.80 (0.8 * 1.0)
+            score=0.8, conf=0.65 → pos=0.72 (0.8 * 0.9)
+            score=0.8, conf=0.5  → pos=0.64 (0.8 * 0.8)
+            score=0.8, conf=0.3  → pos=0.56 (0.8 * 0.7)
+            score=0.8, conf=0.1  → pos=0.40 (0.8 * 0.5)
         """
-        # Base position from combined score
-        base_position = combined_score
+        # Tiered confidence scaling
+        if confidence > 0.8:
+            scale = 1.0   # High confidence - full position
+        elif confidence > 0.6:
+            scale = 0.9   # Good confidence - 10% discount
+        elif confidence > 0.4:
+            scale = 0.8   # Medium confidence - 20% discount
+        elif confidence > 0.2:
+            scale = 0.7   # Low confidence - 30% discount
+        else:
+            scale = 0.5   # Very low confidence - 50% discount (not zero!)
         
-        # Scale by confidence (only if above minimum threshold)
-        if confidence < self.min_confidence:
-            return 0.0  # Not confident enough, no position
-        
-        # Scale position by confidence level
-        # Map confidence [min_confidence, 1.0] to scale [min_position, max_position]
-        confidence_range = 1.0 - self.min_confidence
-        confidence_normalized = (confidence - self.min_confidence) / confidence_range
-        scale = self.min_position + (confidence_normalized * (self.max_position - self.min_position))
-        
-        # Apply scale to base position
-        position_size = base_position * scale
-        
+        position_size = combined_score * scale
         return round(position_size, 2)
     
     def generate_output(self, result: Dict[str, Any], 
