@@ -96,33 +96,78 @@ class KronosTrader(BasePredictor):
             
         Returns:
             Configuration dictionary
+            
+        Raises:
+            FileNotFoundError: If config file is not found or not specified
+            ValueError: If config file is invalid
         """
-        default_config = {
-            'max_staleness_hours': 72,  # Maximum allowed data age in hours
-            'fetch_timeout_minutes': 60,  # Maximum minutes to keep trying before giving up (Kronos updates hourly)
-            'max_retries': 3,  # Maximum number of retry attempts per fetch
-            'use_json_fallback': True,  # Use JSON history for fallback
-            'json_history_dir': 'charts',  # Directory for JSON history
-            'json_max_age_minutes': 700,  # Maximum age of JSON to use for fallback (with buffer for edge cases)
-            'kronos_url': 'https://shiyu-coder.github.io/Kronos-demo/',
-            'confidence_threshold': 0.5,  # Minimum confidence for trading
-            'position_multiplier': 1.0,   # Position size multiplier (0-1)
-            'enable_safety_check': True,  # Enable data freshness check
+        # Default config path if not specified
+        if not config_path:
+            config_path = 'config/kronos_strategy.json'
+        
+        # Convert to Path object for easier handling
+        config_file = Path(config_path)
+        
+        # Check if config file exists
+        if not config_file.exists():
+            error_msg = (
+                f"❌ Kronos configuration file not found: {config_path}\n"
+                f"Please create a configuration file with required fields:\n"
+                f"  max_staleness_hours, fetch_timeout_minutes, max_retries,\n"
+                f"  kronos_url, confidence_threshold, position_multiplier, enable_safety_check\n"
+                f"Optional fields: use_json_fallback, json_history_dir, json_max_age_minutes"
+            )
+            logger.error(error_msg)
+            raise FileNotFoundError(error_msg)
+        
+        # Load configuration
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                user_config = json.load(f)
+            logger.info(f"✓ Loaded Kronos configuration from {config_path}")
+        except json.JSONDecodeError as e:
+            error_msg = f"❌ Invalid JSON in config file {config_path}: {e}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        except Exception as e:
+            error_msg = f"❌ Failed to load config from {config_path}: {e}"
+            logger.error(error_msg)
+            raise
+        
+        # Validate required fields
+        required_fields = [
+            'max_staleness_hours',
+            'fetch_timeout_minutes',
+            'max_retries',
+            'kronos_url',
+            'confidence_threshold',
+            'position_multiplier',
+            'enable_safety_check'
+        ]
+        
+        missing_fields = [field for field in required_fields if field not in user_config]
+        if missing_fields:
+            error_msg = (
+                f"❌ Missing required fields in config file {config_path}: {missing_fields}\n"
+                f"Required fields: max_staleness_hours, fetch_timeout_minutes, max_retries,\n"
+                f"  kronos_url, confidence_threshold, position_multiplier, enable_safety_check"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        # Apply defaults for optional fields
+        optional_defaults = {
+            'use_json_fallback': True,
+            'json_history_dir': 'charts',
+            'json_max_age_minutes': 60
         }
         
-        if config_path and Path(config_path).exists():
-            try:
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    user_config = json.load(f)
-                default_config.update(user_config)
-                logger.info(f"Loaded config from {config_path}")
-            except Exception as e:
-                logger.warning(f"Failed to load config from {config_path}: {e}")
-                logger.info("Using default configuration")
-        else:
-            logger.info("Using default configuration")
+        for key, default_value in optional_defaults.items():
+            if key not in user_config:
+                user_config[key] = default_value
+                logger.debug(f"Using default value for optional field '{key}': {default_value}")
         
-        return default_config
+        return user_config
     
     def _convert_symbol(self, symbol: str) -> str:
         """
