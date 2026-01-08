@@ -232,10 +232,11 @@ class OnChainFetcher:
                 if end_time:
                     params['endTime'] = end_time
                 
-                # Use authenticated request
+                # Use authenticated request - updated endpoint
+                # Old endpoint /fapi/v1/allForceOrders is deprecated
                 data = self.usdm_client.sign_request(
                     "GET", 
-                    "/fapi/v1/allForceOrders",
+                    "/fapi/v1/forceOrders",
                     params
                 )
                 
@@ -251,12 +252,15 @@ class OnChainFetcher:
                 return data
                 
             except Exception as e:
-                logger.warning(f"Authenticated liquidation fetch failed: {e}")
-                return []
+                logger.debug(f"Authenticated liquidation fetch failed: {e}")
+                logger.debug("Falling back to unauthenticated attempt...")
+                # Fall through to unauthenticated method
+                pass
         
-        # Try unauthenticated public endpoint (usually requires auth)
+        # Try unauthenticated public endpoint
         try:
-            url = f"{self.binance_base}/fapi/v1/allForceOrders"
+            # Updated endpoint - old /fapi/v1/allForceOrders is deprecated
+            url = f"{self.binance_base}/fapi/v1/forceOrders"
             params = {"symbol": symbol}
             
             if start_time:
